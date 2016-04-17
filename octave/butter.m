@@ -1,7 +1,7 @@
 pkg load control
 pkg load signal
 
-Fc = 10;
+Fc = 2;
 Tb = 1 / (2 * pi * Fc);
 Td = 0.010;
 Fd = 1 / Td;

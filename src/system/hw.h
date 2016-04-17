@@ -9,8 +9,10 @@
 #define SRC_SYSTEM_HW_H_
 
 #include "uart_device.h"
+
 #include "gyro.h"
 #include "accelerometer.h"
+#include "magneto.h"
 
 void hw_led_init(void);
 void hw_led_set_red(int state);
@@ -22,5 +24,6 @@ uart_device_t *hw_get_link(void);
 void hw_mems_init(void);
 struct gyro_driver *hw_get_gyro(void);
 struct accelerometer_driver *hw_get_accel(void);
+struct magneto_driver *hw_get_mag(void);
 
 #endif /* SRC_SYSTEM_HW_H_ */

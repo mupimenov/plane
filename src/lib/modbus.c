@@ -9,6 +9,141 @@
 
 #include <string.h>
 
+/* STATIC */
+
+static uint16_t crc16(const uint8_t *buffer, uint16_t buffer_length);
+
+/* MODBUS_ERROR */
+
+static int modbus_send_error(struct modbus_instance *instance, uint8_t function, uint8_t error);
+
+/* MODBUS_READ_* */
+
+typedef struct modbus_read_command {
+	uint16_t address;
+	uint16_t count;
+} modbus_read_command_t;
+
+static int modbus_parse_read_command(const uint8_t *data, uint8_t dlen, struct modbus_read_command *command);
+
+/* MODBUS_READ_COILS */
+
+static int modbus_read_coils_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_READ_DISCRETE_INPUTS */
+
+static int modbus_read_discrete_inputs_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_READ_HOLDING_REGISTERS */
+
+static int modbus_read_holding_registers_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_READ_INPUT_REGISTERS */
+
+static int modbus_read_input_registers_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_WRITE_BIT */
+
+typedef struct modbus_write_bit_command {
+	uint16_t address;
+	uint16_t data;
+} modbus_write_bit_command_t;
+
+static int modbus_parse_write_bit_command(const uint8_t *data, uint8_t dlen, struct modbus_write_bit_command *command);
+
+/* MODBUS_WRITE_REG */
+
+typedef struct modbus_write_reg_command {
+	uint16_t address;
+	uint16_t data;
+} modbus_write_reg_command_t;
+
+static int modbus_parse_write_reg_command(const uint8_t *data, uint8_t dlen, struct modbus_write_reg_command *command);
+
+/* MODBUS_WRITE_SINGLE_COIL */
+
+static int modbus_write_coil_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_WRITE_SINGLE_REGISTER */
+
+static int modbus_write_register_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_WRITE_MULTIPLE_* */
+
+typedef struct modbus_write_multiple_command {
+	uint16_t address;
+	uint16_t count;
+	uint8_t bytes;
+} modbus_write_multiple_command_t;
+
+static int modbus_parse_write_multiple_command(const uint8_t *data, uint8_t dlen, struct modbus_write_multiple_command *command);
+
+/* MODBUS_WRITE_MULTIPLE_COILS */
+
+static int modbus_write_multiple_coils_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_WRITE_MULTIPLE_REGISTERS */
+
+static int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_REPORT_SLAVE_ID */
+
+static int modbus_report_slave_id_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_READ_GENERAL_REFERENCE */
+
+typedef struct modbus_read_general_reference_cmd {
+	uint8_t link_type;
+	uint16_t filenum;
+	uint16_t address;
+	uint16_t count;
+} modbus_read_general_reference_cmd_t;
+
+static int modbus_parse_read_general_reference_command(const uint8_t *data, uint8_t dlen, struct modbus_read_general_reference_cmd *command);
+
+static int modbus_read_general_reference(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_WRITE_GENERAL_REFERENCE */
+
+typedef struct modbus_write_general_reference_cmd {
+	uint8_t link_type;
+	uint16_t filenum;
+	uint16_t address;
+	uint16_t count;
+} modbus_write_general_reference_cmd_t;
+
+static int modbus_parse_write_general_reference_command(const uint8_t *data, uint8_t dlen, struct modbus_write_general_reference_cmd *command);
+
+static int modbus_write_general_reference(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_MASK_WRITE_REGISTER */
+
+typedef struct modbus_mask_write_command {
+	uint16_t address;
+	uint16_t and_mask;
+	uint16_t or_mask;
+} modbus_mask_write_command_t;
+
+static int modbus_parse_mask_write_reg_command(const uint8_t *data, uint8_t dlen, struct modbus_mask_write_command *command);
+
+static int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* MODBUS_WRITE_AND_READ_REGISTERS */
+
+typedef struct modbus_write_read_regs_command {
+	uint16_t read_address;
+	uint16_t read_count;
+	uint16_t write_address;
+	uint16_t write_count;
+	uint8_t bytes;
+} modbus_write_read_regs_command_t;
+
+static int modbus_parse_write_read_regs_command(const uint8_t *data, uint8_t dlen, struct modbus_write_read_regs_command *command);
+
+static int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct modbus_request *req);
+
+/* CRC-16 */
+
 /* Table of CRC values for high-order byte */
 static const uint8_t table_crc_hi[] = {
     0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
@@ -69,6 +204,8 @@ static const uint8_t table_crc_lo[] = {
     0x43, 0x83, 0x41, 0x81, 0x80, 0x40
 };
 
+/* IMPLEMENTATION */
+
 static uint16_t crc16(const uint8_t *buffer, uint16_t buffer_length)
 {
     uint8_t crc_hi = 0xFF; /* high CRC byte initialized */
@@ -100,103 +237,6 @@ static uint16_t crc16(const uint8_t *buffer, uint16_t buffer_length)
 #define MODBUS_ADATA_OFFSET			0x03
 #define MODBUS_AERROR_OFFSET 		0x02
 
-int modbus_io(struct modbus_instance *instance)
-{
-	uint16_t crc_calculated;
-	uint16_t crc_received;
-	uint8_t *packet;
-	int plen;
-	struct modbus_request req;
-	int ret;
-
-	if (!instance)
-		return -1;
-
-	if (!instance->read)
-		MODBUS_RETURN(instance, MODBUS_INVAL);
-
-	packet = instance->recv_buffer;
-	plen = instance->read(instance, packet, instance->recv_buffer_size);
-	if (plen < MODBUS_RPACKET_MIN_LEN)
-		MODBUS_RETURN(instance, MODBUS_NO_PACKET);
-
-	crc_calculated = crc16(packet, plen - 2);
-	crc_received = (packet[plen - 2] << 8) | packet[plen - 1];
-
-	if (crc_calculated != crc_received)
-		MODBUS_RETURN(instance, MODBUS_BAD_CRC);
-
-	if (packet[MODBUS_RADDRESS_OFFSET] != instance->address)
-		MODBUS_RETURN(instance, MODBUS_BAD_ADDRESS);
-
-	req.address = packet[MODBUS_RADDRESS_OFFSET];
-	req.function = (enum modbus_request_function)packet[MODBUS_RFUNCTION_OFFSET];
-	req.data = &packet[MODBUS_RDATA_OFFSET];
-	req.dlen = plen - MODBUS_RDATA_OFFSET - 2;
-
-	if (instance->open)
-	{
-		if ((ret = instance->open(instance)) < 0)
-			return ret;
-	}
-
-	switch (req.function)
-	{
-	case MODBUS_READ_COILS:
-		ret = modbus_read_coils_cmd(instance, &req);
-		break;
-	case MODBUS_READ_DISCRETE_INPUTS:
-		ret = modbus_read_discrete_inputs_cmd(instance, &req);
-		break;
-	case MODBUS_READ_HOLDING_REGISTERS:
-		ret = modbus_read_holding_registers_cmd(instance, &req);
-		break;
-	case MODBUS_READ_INPUT_REGISTERS:
-		ret = modbus_read_input_registers_cmd(instance, &req);
-		break;
-
-	case MODBUS_WRITE_SINGLE_COIL:
-		ret = modbus_write_coil_cmd(instance, &req);
-		break;
-	case MODBUS_WRITE_SINGLE_REGISTER:
-		ret = modbus_write_register_cmd(instance, &req);
-		break;
-
-	case MODBUS_READ_EXCEPTION_STATUS:
-		instance->error = MODBUS_NOT_IMPLEMENTED;
-		ret = -1;
-		break;
-
-	case MODBUS_WRITE_MULTIPLE_COILS:
-		ret = modbus_write_multiple_coils_cmd(instance, &req);
-		break;
-	case MODBUS_WRITE_MULTIPLE_REGISTERS:
-		ret = modbus_write_multiple_regs_cmd(instance, &req);
-		break;
-
-	case MODBUS_REPORT_SLAVE_ID:
-		ret = modbus_report_slave_id_cmd(instance, &req);
-		break;
-
-	case MODBUS_MASK_WRITE_REGISTER:
-		ret = modbus_mask_write_reg_cmd(instance, &req);
-		break;
-
-	case MODBUS_WRITE_AND_READ_REGISTERS:
-		ret = modbus_write_read_regs_cmd(instance, &req);
-		break;
-
-	default:
-		ret = modbus_send_error(instance, req.function, MODBUS_ERROR_ILLEGAL_FUNCTION);
-		break;
-	}
-
-	if (instance->close)
-		(void)instance->close(instance);
-
-	return ret;
-}
-
 size_t modbus_start_answer(struct modbus_instance *instance, uint8_t function)
 {
 	instance->send_buffer[MODBUS_AADDRESS_OFFSET] = instance->address;
@@ -218,16 +258,18 @@ size_t modbus_end_answer(struct modbus_instance *instance, size_t len)
 int modbus_send_error(struct modbus_instance *instance, uint8_t function, uint8_t error)
 {
 	size_t len = modbus_start_answer(instance, 0x80 | function);
+	const struct modbus_functions *functions = instance->functions;
+
 	instance->send_buffer[len++] = error;
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
 #define MODBUS_READ_CMD_ADDRESS_OFFSET 0x00
 #define MODBUS_READ_CMD_COUNT_OFFSET 0x02
 
-int modbus_parse_read_command(const uint8_t *data, uint8_t dlen,
+static int modbus_parse_read_command(const uint8_t *data, uint8_t dlen,
 		struct modbus_read_command * command)
 {
 	if (command == NULL)
@@ -292,6 +334,7 @@ static int _modbus_read_bits(struct modbus_instance *instance, struct modbus_req
 		enum modbus_table table)
 {
 	struct modbus_read_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	uint8_t *bits;
 
@@ -318,9 +361,9 @@ static int _modbus_read_bits(struct modbus_instance *instance, struct modbus_req
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->before_read_table)
+	if (functions->before_read_table)
 	{
-		ret = instance->before_read_table(instance, table, command.address, command.count);
+		ret = functions->before_read_table(instance, table, command.address, command.count);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -328,25 +371,25 @@ static int _modbus_read_bits(struct modbus_instance *instance, struct modbus_req
 	len = modbus_start_answer(instance, req->function);
 	instance->send_buffer[len++] = (command.count >> 3) + ((command.count & 7)? 1: 0);
 
-	if (instance->lock)
-		instance->lock(instance, table, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, table, MODBUS_LOCK);
 
 	len = _modbus_read_io_status(command.address, command.count, bits, instance->send_buffer, len);
 
-	if (instance->lock)
-		instance->lock(instance, table, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, table, MODBUS_UNLOCK);
 
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
-int modbus_read_coils_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_read_coils_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	return _modbus_read_bits(instance, req, MODBUS_TABLE_COILS);
 }
 
-int modbus_read_discrete_inputs_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_read_discrete_inputs_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	return _modbus_read_bits(instance, req, MODBUS_TABLE_DISCRETE_INPUTS);
 }
@@ -375,6 +418,7 @@ static int _modbus_read_regs(struct modbus_instance *instance, struct modbus_req
 		enum modbus_table table)
 {
 	struct modbus_read_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	size_t i;
 	uint16_t *regs;
@@ -402,9 +446,9 @@ static int _modbus_read_regs(struct modbus_instance *instance, struct modbus_req
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->before_read_table)
+	if (functions->before_read_table)
 	{
-		ret = instance->before_read_table(instance, table, command.address, command.count);
+		ret = functions->before_read_table(instance, table, command.address, command.count);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -412,28 +456,28 @@ static int _modbus_read_regs(struct modbus_instance *instance, struct modbus_req
 	len = modbus_start_answer(instance, req->function);
 	instance->send_buffer[len++] = command.count * 2;
 
-	if (instance->lock)
-		instance->lock(instance, table, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, table, MODBUS_LOCK);
 
 	for (i = command.address; i < command.address + command.count; i++) {
 		instance->send_buffer[len++] = regs[i] >> 8;
 		instance->send_buffer[len++] = regs[i] & 0xFF;
 	}
 
-	if (instance->lock)
-		instance->lock(instance, table, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, table, MODBUS_UNLOCK);
 
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
-int modbus_read_holding_registers_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_read_holding_registers_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	return _modbus_read_regs(instance, req, MODBUS_TABLE_HOLDING_REGISTERS);
 }
 
-int modbus_read_input_registers_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_read_input_registers_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	return _modbus_read_regs(instance, req, MODBUS_TABLE_INPUT_REGISTERS);
 }
@@ -441,7 +485,7 @@ int modbus_read_input_registers_cmd(struct modbus_instance *instance, struct mod
 #define MODBUS_WRITE_BIT_CMD_ADDRESS_OFFSET 0x00
 #define MODBUS_WRITE_BIT_CMD_DATA_OFFSET 0x02
 
-int modbus_parse_write_bit_command(const uint8_t *data, uint8_t dlen,
+static int modbus_parse_write_bit_command(const uint8_t *data, uint8_t dlen,
 		struct modbus_write_bit_command *command)
 {
 	if (command == NULL)
@@ -456,9 +500,10 @@ int modbus_parse_write_bit_command(const uint8_t *data, uint8_t dlen,
 	return 0;
 }
 
-int modbus_write_coil_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_write_coil_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	struct modbus_write_bit_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	uint8_t *bits;
 
@@ -484,17 +529,17 @@ int modbus_write_coil_cmd(struct modbus_instance *instance, struct modbus_reques
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_COILS, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_COILS, MODBUS_LOCK);
 
 	bits[command.address] = command.data? 1: 0;
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_COILS, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_COILS, MODBUS_UNLOCK);
 
-	if (instance->after_write_table)
+	if (functions->after_write_table)
 	{
-		ret = instance->after_write_table(instance, MODBUS_TABLE_COILS, command.address, 1);
+		ret = functions->after_write_table(instance, MODBUS_TABLE_COILS, command.address, 1);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -504,13 +549,13 @@ int modbus_write_coil_cmd(struct modbus_instance *instance, struct modbus_reques
 	len += req->dlen;
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
 #define MODBUS_WRITE_REG_CMD_ADDRESS_OFFSET 0x00
 #define MODBUS_WRITE_REG_CMD_DATA_OFFSET 0x02
 
-int modbus_parse_write_reg_command(const uint8_t *data, uint8_t dlen,
+static int modbus_parse_write_reg_command(const uint8_t *data, uint8_t dlen,
 		struct modbus_write_reg_command *command)
 {
 	if (command == NULL)
@@ -525,13 +570,14 @@ int modbus_parse_write_reg_command(const uint8_t *data, uint8_t dlen,
 	return 0;
 }
 
-int modbus_write_register_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_write_register_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
-	struct modbus_write_bit_command command;
+	struct modbus_write_reg_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	uint16_t *regs;
 
-	int ret = modbus_parse_write_bit_command(req->data, req->dlen, &command);
+	int ret = modbus_parse_write_reg_command(req->data, req->dlen, &command);
 	if (ret < 0)
 	{
 		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_FUNCTION);
@@ -546,17 +592,17 @@ int modbus_write_register_cmd(struct modbus_instance *instance, struct modbus_re
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
 	regs[command.address] = command.data;
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
 
-	if (instance->after_write_table)
+	if (functions->after_write_table)
 	{
-		ret = instance->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.address, 1);
+		ret = functions->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.address, 1);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -566,14 +612,14 @@ int modbus_write_register_cmd(struct modbus_instance *instance, struct modbus_re
 	len += req->dlen;
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
 #define MODBUS_WRITE_MULTIPLE_CMD_ADDRESS_OFFSET 0x00
 #define MODBUS_WRITE_MULTIPLE_CMD_COUNT_OFFSET 0x02
 #define MODBUS_WRITE_MULTIPLE_CMD_BYTES_OFFSET 0x04
 
-int modbus_parse_write_multiple_command(const uint8_t *data, uint8_t dlen,
+static int modbus_parse_write_multiple_command(const uint8_t *data, uint8_t dlen,
 		struct modbus_write_multiple_command *command)
 {
 	if (command == NULL)
@@ -605,9 +651,10 @@ static void _modbus_set_bits_from_bytes(uint8_t *tbits, uint16_t address, uint16
 
 #define MODBUS_WRITE_MULTIPLE_DATA_OFFSET 0x05
 
-int modbus_write_multiple_coils_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_write_multiple_coils_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	struct modbus_write_multiple_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	uint8_t *bits;
 
@@ -633,17 +680,17 @@ int modbus_write_multiple_coils_cmd(struct modbus_instance *instance, struct mod
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_COILS, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_COILS, MODBUS_LOCK);
 
 	_modbus_set_bits_from_bytes(bits, command.address, command.count, req->data + MODBUS_WRITE_MULTIPLE_DATA_OFFSET);
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_COILS, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_COILS, MODBUS_UNLOCK);
 
-	if (instance->after_write_table)
+	if (functions->after_write_table)
 	{
-		ret = instance->after_write_table(instance, MODBUS_TABLE_COILS, command.address, command.count);
+		ret = functions->after_write_table(instance, MODBUS_TABLE_COILS, command.address, command.count);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -653,12 +700,13 @@ int modbus_write_multiple_coils_cmd(struct modbus_instance *instance, struct mod
 	len += MODBUS_WRITE_MULTIPLE_DATA_OFFSET - 1;
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
-int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	struct modbus_write_multiple_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	size_t i;
 	size_t j;
@@ -686,8 +734,8 @@ int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, struct modb
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
 	for (i = command.address, j = 0; i < command.address + command.count; i++, j += 2) {
 		/* 6 and 7 = first value */
@@ -695,12 +743,12 @@ int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, struct modb
 							+ req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j + 1];
 	}
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
 
-	if (instance->after_write_table)
+	if (functions->after_write_table)
 	{
-		ret = instance->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.address, command.count);
+		ret = functions->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.address, command.count);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -710,14 +758,15 @@ int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, struct modb
 	len += MODBUS_WRITE_MULTIPLE_DATA_OFFSET - 1;
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
 #define MODBUS_SLAVE_ID 180
 
-int modbus_report_slave_id_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_report_slave_id_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	size_t len = modbus_start_answer(instance, req->function);
+	const struct modbus_functions *functions = instance->functions;
 	size_t bytes_pos = len++;
 	instance->send_buffer[len++] = MODBUS_SLAVE_ID;
 	instance->send_buffer[len++] = 0xFF;
@@ -731,14 +780,153 @@ int modbus_report_slave_id_cmd(struct modbus_instance *instance, struct modbus_r
 	instance->send_buffer[bytes_pos] = len + 2;
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
+}
+
+#define MODBUS_READ_GENERAL_REFERENCE_CMD_LINK_TYPE_OFFSET 0x00
+#define MODBUS_READ_GENERAL_REFERENCE_CMD_FILENUM_OFFSET 0x01
+#define MODBUS_READ_GENERAL_REFERENCE_CMD_ADDRESS_OFFSET 0x03
+#define MODBUS_READ_GENERAL_REFERENCE_CMD_COUNT_OFFSET 0x05
+
+static int modbus_parse_read_general_reference_command(const uint8_t *data, uint8_t dlen, struct modbus_read_general_reference_cmd *command)
+{
+	if (command == NULL)
+		return -1;
+
+	if (dlen < 8)
+		return -1;
+
+	++data;
+
+	command->link_type = data[MODBUS_READ_GENERAL_REFERENCE_CMD_LINK_TYPE_OFFSET];
+	command->filenum = data[MODBUS_READ_GENERAL_REFERENCE_CMD_FILENUM_OFFSET + 1] | (data[MODBUS_READ_GENERAL_REFERENCE_CMD_FILENUM_OFFSET] << 8);
+	command->address = data[MODBUS_READ_GENERAL_REFERENCE_CMD_ADDRESS_OFFSET + 1] | (data[MODBUS_READ_GENERAL_REFERENCE_CMD_ADDRESS_OFFSET] << 8);
+	command->count = data[MODBUS_READ_GENERAL_REFERENCE_CMD_COUNT_OFFSET + 1] | (data[MODBUS_READ_GENERAL_REFERENCE_CMD_COUNT_OFFSET] << 8);
+
+	return 0;
+}
+
+static int modbus_read_general_reference(struct modbus_instance *instance, struct modbus_request *req)
+{
+	struct modbus_read_general_reference_cmd command;
+	const struct modbus_functions *functions = instance->functions;
+	size_t len;
+	int ret;
+
+	if (!functions->read_file)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_FUNCTION);
+
+		MODBUS_RETURN(instance, MODBUS_NOT_IMPLEMENTED);
+	}
+
+	ret = modbus_parse_read_general_reference_command(req->data, req->dlen, &command);
+	if (ret < 0)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_FUNCTION);
+
+		MODBUS_RETURN(instance, MODBUS_BAD_COMMAND);
+	}
+
+	if (command.link_type != 0x06
+			|| command.count < 1)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_VALUE);
+
+		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
+	}
+
+	len = modbus_start_answer(instance, req->function);
+	instance->send_buffer[len] = (command.count << 1) + 1;
+	++len;
+
+	ret = functions->read_file(instance, command.filenum, command.address, command.count, instance->send_buffer + len);
+	if (ret < 0)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_ADDRESS);
+
+		MODBUS_RETURN(instance, MODBUS_INT);
+	}
+
+	len += (command.count << 1);
+	len = modbus_end_answer(instance, len);
+
+	return functions->write(instance, instance->send_buffer, len);
+}
+
+#define MODBUS_WRITE_GENERAL_REFERENCE_CMD_LINK_TYPE_OFFSET 0x01
+#define MODBUS_WRITE_GENERAL_REFERENCE_CMD_FILENUM_OFFSET 0x02
+#define MODBUS_WRITE_GENERAL_REFERENCE_CMD_ADDRESS_OFFSET 0x04
+#define MODBUS_WRITE_GENERAL_REFERENCE_CMD_COUNT_OFFSET 0x06
+#define MODBUS_WRITE_GENERAL_REFERENCE_CMD_DATA_OFFSET 0x08
+
+static int modbus_parse_write_general_reference_command(const uint8_t *data, uint8_t dlen, struct modbus_write_general_reference_cmd *command)
+{
+	if (command == NULL)
+		return -1;
+
+	if (dlen <= 8)
+		return -1;
+
+	command->link_type = data[MODBUS_WRITE_GENERAL_REFERENCE_CMD_LINK_TYPE_OFFSET];
+	command->filenum = data[MODBUS_WRITE_GENERAL_REFERENCE_CMD_FILENUM_OFFSET + 1] | (data[MODBUS_WRITE_GENERAL_REFERENCE_CMD_FILENUM_OFFSET] << 8);
+	command->address = data[MODBUS_WRITE_GENERAL_REFERENCE_CMD_ADDRESS_OFFSET + 1] | (data[MODBUS_WRITE_GENERAL_REFERENCE_CMD_ADDRESS_OFFSET] << 8);
+	command->count = data[MODBUS_WRITE_GENERAL_REFERENCE_CMD_COUNT_OFFSET + 1] | (data[MODBUS_WRITE_GENERAL_REFERENCE_CMD_COUNT_OFFSET] << 8);
+
+	return 0;
+}
+
+static int modbus_write_general_reference(struct modbus_instance *instance, struct modbus_request *req)
+{
+	struct modbus_write_general_reference_cmd command;
+	const struct modbus_functions *functions = instance->functions;
+	size_t len;
+	int ret;
+
+	if (!functions->read_file)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_FUNCTION);
+
+		MODBUS_RETURN(instance, MODBUS_NOT_IMPLEMENTED);
+	}
+
+	ret = modbus_parse_write_general_reference_command(req->data, req->dlen, &command);
+	if (ret < 0)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_FUNCTION);
+
+		MODBUS_RETURN(instance, MODBUS_BAD_COMMAND);
+	}
+
+	if (command.link_type != 0x06
+			|| command.count < 1)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_VALUE);
+
+		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
+	}
+
+	ret = functions->write_file(instance, command.filenum, command.address, command.count, req->data + MODBUS_WRITE_GENERAL_REFERENCE_CMD_DATA_OFFSET);
+	if (ret < 0)
+	{
+		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_ADDRESS);
+
+		MODBUS_RETURN(instance, MODBUS_INT);
+	}
+
+	len = modbus_start_answer(instance, req->function);
+	memcpy(instance->send_buffer + len, req->data, req->dlen);
+	len += req->dlen;
+	len = modbus_end_answer(instance, len);
+
+	return functions->write(instance, instance->send_buffer, len);
 }
 
 #define MODBUS_MASK_WRITE_CMD_ADDRESS_OFFSET 0x00
 #define MODBUS_MASK_WRITE_CMD_AND_OFFSET 0x02
 #define MODBUS_MASK_WRITE_CMD_OR_OFFSET 0x04
 
-int modbus_parse_mask_write_reg_command(const uint8_t *data, uint8_t dlen, struct modbus_mask_write_command *command)
+static int modbus_parse_mask_write_reg_command(const uint8_t *data, uint8_t dlen, struct modbus_mask_write_command *command)
 {
 	if (command == NULL)
 		return -1;
@@ -753,9 +941,10 @@ int modbus_parse_mask_write_reg_command(const uint8_t *data, uint8_t dlen, struc
 	return 0;
 }
 
-int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	struct modbus_mask_write_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	uint16_t *regs;
 	uint16_t data;
@@ -775,19 +964,19 @@ int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct modbus_re
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
 	data = regs[command.address];
 	data = (data & command.and_mask) | (command.or_mask & (~command.and_mask));
 	regs[command.address] = data;
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
 
-	if (instance->after_write_table)
+	if (functions->after_write_table)
 	{
-		ret = instance->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.address, 1);
+		ret = functions->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.address, 1);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -797,7 +986,7 @@ int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct modbus_re
 	len += req->dlen;
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
 }
 
 #define MODBUS_READ_WRITE_CMD_READ_ADDRESS_OFFSET 0x00
@@ -806,7 +995,7 @@ int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct modbus_re
 #define MODBUS_READ_WRITE_CMD_WRITE_COUNT_OFFSET 0x06
 #define MODBUS_READ_WRITE_CMD_BYTES_OFFSET 0x08
 
-int modbus_parse_write_read_regs_command(const uint8_t *data, uint8_t dlen, struct modbus_write_read_regs_command *command)
+static int modbus_parse_write_read_regs_command(const uint8_t *data, uint8_t dlen, struct modbus_write_read_regs_command *command)
 {
 	if (command == NULL)
 		return -1;
@@ -823,9 +1012,10 @@ int modbus_parse_write_read_regs_command(const uint8_t *data, uint8_t dlen, stru
 	return 0;
 }
 
-int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct modbus_request *req)
+static int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct modbus_request *req)
 {
 	struct modbus_write_read_regs_command command;
+	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	size_t i;
 	size_t j;
@@ -857,9 +1047,9 @@ int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct modbus_r
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (instance->before_read_table)
+	if (functions->before_read_table)
 	{
-		ret = instance->before_read_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.read_address, command.read_count);
+		ret = functions->before_read_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.read_address, command.read_count);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
@@ -867,8 +1057,8 @@ int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct modbus_r
 	len = modbus_start_answer(instance, req->function);
 	instance->send_buffer[len++] = command.read_count * 2;
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
 	for (i = command.write_address, j = 0; i < command.write_address + command.write_count; i++, j += 2) {
 		write_regs[i] = (req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j] << 8) +
@@ -880,17 +1070,129 @@ int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct modbus_r
 		instance->send_buffer[len++] = read_regs[i] & 0xFF;
 	}
 
-	if (instance->lock)
-		instance->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
+	if (functions->lock)
+		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
 
-	if (instance->after_write_table)
+	if (functions->after_write_table)
 	{
-		ret = instance->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.write_address, command.write_count);
+		ret = functions->after_write_table(instance, MODBUS_TABLE_HOLDING_REGISTERS, command.write_address, command.write_count);
 		if (ret < 0)
 			MODBUS_RETURN(instance, MODBUS_INT);
 	}
 
 	len = modbus_end_answer(instance, len);
 
-	return instance->write(instance, instance->send_buffer, len);
+	return functions->write(instance, instance->send_buffer, len);
+}
+
+/* IO */
+
+int modbus_io(struct modbus_instance *instance)
+{
+	uint16_t crc_calculated;
+	uint16_t crc_received;
+	uint8_t *packet;
+	const struct modbus_functions *functions;
+	int plen;
+	struct modbus_request req;
+	int ret;
+
+	if (!instance)
+		return -1;
+
+	functions = instance->functions;
+	if (!functions)
+		MODBUS_RETURN(instance, MODBUS_INVAL);
+
+	if (!instance->functions->read)
+		MODBUS_RETURN(instance, MODBUS_INVAL);
+
+	packet = instance->recv_buffer;
+	plen = functions->read(instance, packet, instance->recv_buffer_size);
+	if (plen < MODBUS_RPACKET_MIN_LEN)
+		MODBUS_RETURN(instance, MODBUS_NO_PACKET);
+
+	crc_calculated = crc16(packet, plen - 2);
+	crc_received = (packet[plen - 2] << 8) | packet[plen - 1];
+
+	if (crc_calculated != crc_received)
+		MODBUS_RETURN(instance, MODBUS_BAD_CRC);
+
+	if (packet[MODBUS_RADDRESS_OFFSET] != instance->address)
+		MODBUS_RETURN(instance, MODBUS_BAD_ADDRESS);
+
+	req.address = packet[MODBUS_RADDRESS_OFFSET];
+	req.function = (enum modbus_request_function)packet[MODBUS_RFUNCTION_OFFSET];
+	req.data = &packet[MODBUS_RDATA_OFFSET];
+	req.dlen = plen - MODBUS_RDATA_OFFSET - 2;
+
+	if (functions->open)
+	{
+		if ((ret = functions->open(instance)) < 0)
+			return ret;
+	}
+
+	switch (req.function)
+	{
+	case MODBUS_READ_COILS:
+		ret = modbus_read_coils_cmd(instance, &req);
+		break;
+	case MODBUS_READ_DISCRETE_INPUTS:
+		ret = modbus_read_discrete_inputs_cmd(instance, &req);
+		break;
+	case MODBUS_READ_HOLDING_REGISTERS:
+		ret = modbus_read_holding_registers_cmd(instance, &req);
+		break;
+	case MODBUS_READ_INPUT_REGISTERS:
+		ret = modbus_read_input_registers_cmd(instance, &req);
+		break;
+
+	case MODBUS_WRITE_SINGLE_COIL:
+		ret = modbus_write_coil_cmd(instance, &req);
+		break;
+	case MODBUS_WRITE_SINGLE_REGISTER:
+		ret = modbus_write_register_cmd(instance, &req);
+		break;
+
+	case MODBUS_READ_EXCEPTION_STATUS:
+		instance->error = MODBUS_NOT_IMPLEMENTED;
+		ret = -1;
+		break;
+
+	case MODBUS_WRITE_MULTIPLE_COILS:
+		ret = modbus_write_multiple_coils_cmd(instance, &req);
+		break;
+	case MODBUS_WRITE_MULTIPLE_REGISTERS:
+		ret = modbus_write_multiple_regs_cmd(instance, &req);
+		break;
+
+	case MODBUS_REPORT_SLAVE_ID:
+		ret = modbus_report_slave_id_cmd(instance, &req);
+		break;
+
+	case MODBUS_READ_GENERAL_REFERENCE:
+		ret = modbus_read_general_reference(instance, &req);
+		break;
+
+	case MODBUS_WRITE_GENERAL_REFERENCE:
+		ret = modbus_write_general_reference(instance, &req);
+		break;
+
+	case MODBUS_MASK_WRITE_REGISTER:
+		ret = modbus_mask_write_reg_cmd(instance, &req);
+		break;
+
+	case MODBUS_WRITE_AND_READ_REGISTERS:
+		ret = modbus_write_read_regs_cmd(instance, &req);
+		break;
+
+	default:
+		ret = modbus_send_error(instance, req.function, MODBUS_ERROR_ILLEGAL_FUNCTION);
+		break;
+	}
+
+	if (functions->close)
+		(void)functions->close(instance);
+
+	return ret;
 }

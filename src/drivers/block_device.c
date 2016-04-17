@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 bool
-device_open(struct block_device *dev)
+block_open(struct block_device *dev)
 {
 	if (dev->open != NULL)
 	{
@@ -14,7 +14,7 @@ device_open(struct block_device *dev)
 }
 
 bool
-device_close(struct block_device *dev)
+block_close(struct block_device *dev)
 {
 	if (dev->close != NULL)
 	{
@@ -25,7 +25,7 @@ device_close(struct block_device *dev)
 }
 
 bool
-device_setup(struct block_device *dev, unsigned long parameter, unsigned long value)
+block_setup(struct block_device *dev, unsigned long parameter, unsigned long value)
 {
 	if (dev->setup != NULL)
 	{
@@ -36,7 +36,7 @@ device_setup(struct block_device *dev, unsigned long parameter, unsigned long va
 }
 
 bool
-device_configure(struct block_device *dev)
+block_configure(struct block_device *dev)
 {
 	if (dev->configure != NULL)
 	{
@@ -47,7 +47,7 @@ device_configure(struct block_device *dev)
 }
 
 int 
-device_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size)
+block_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size)
 {
 	if (dev->read != NULL)
 	{
@@ -58,7 +58,7 @@ device_read(struct block_device *dev, unsigned long address, unsigned char *buff
 }
 
 int 
-device_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size)
+block_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size)
 {
 	if (dev->write != NULL)
 	{

@@ -21,6 +21,7 @@ struct madgwick_ahrs_instance {
 void madgwick_ahrs_init(struct madgwick_ahrs_instance *instance, float period, float beta);
 
 void madgwick_ahrs_update_imu(struct madgwick_ahrs_instance *instance, float gx, float gy, float gz, float ax, float ay, float az);
+void madgwick_ahrs_update(struct madgwick_ahrs_instance *instance, float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
 
 float madgwick_ahrs_get_pitch(struct madgwick_ahrs_instance *instance);
 float madgwick_ahrs_get_roll(struct madgwick_ahrs_instance *instance);

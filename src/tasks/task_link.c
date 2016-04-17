@@ -9,6 +9,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "cmsis_os.h"
 #include "hw.h"
@@ -51,7 +52,7 @@ static struct input_registers_table {
 } 									lnk_input1;
 
 static struct coils_table {
-	uint8_t dummy;
+	uint8_t calibrate;
 } 									lnk_coil1;
 
 static struct holding_registers_table {
@@ -85,22 +86,51 @@ static const struct modbus_regs_table lnk_holding_tables[] = {
 static int _modbus_read(struct modbus_instance *instance, uint8_t *buffer, uint8_t max_size)
 {
 	uart_device_t *dev = (uart_device_t *)instance->arg;
-	return device_read(dev, 0, buffer, max_size);
+	return device_read(dev, buffer, max_size);
 }
 
 static int _modbus_write(struct modbus_instance *instance, const uint8_t *packet, uint8_t plen)
 {
 	uart_device_t *dev = (uart_device_t *)instance->arg;
 
-	device_write(dev, 0, packet, plen);
+	device_write(dev, packet, plen);
 
 	MODBUS_RETURN(instance, MODBUS_SUCCESS);
 }
 
+#define COILS_OFFSET(__table__, __var__) ((uint8_t*)(&(__table__)) - (uint8_t*)(&(__table__).__var__))
+#define COILS_IN(__start__, __offset__,__address__, __count__) ((__start__ + __offset__) >= __address__ && (__start__ + __offset__) <= (__address__ + __count__))
+
+static int _modbus_after_write_table(struct modbus_instance *instance, enum modbus_table table, uint16_t address, uint16_t count)
+{
+	if (table == MODBUS_TABLE_COILS)
+	{
+		int offset = COILS_OFFSET(lnk_coil1, calibrate);
+		if (COILS_IN(0x0000, offset, address, count))
+		{
+			if (lnk_coil1.calibrate)
+				calibrate();
+		}
+	}
+
+	MODBUS_RETURN(instance, MODBUS_SUCCESS);
+}
+
+static const struct modbus_functions lnk_modbus_functions = {
+		.read = _modbus_read,
+		.write = _modbus_write,
+		.after_write_table = _modbus_after_write_table
+};
+
 static void _update_inputs(void)
 {
+	const float rad2deg = (180.0 / M_PI);
 	float data[3];
 
+	/* COILS */
+	lnk_coil1.calibrate = calibration_in_progress();
+
+	/* INPUT REGISTERS */
 	get_gyro_data(data);
 
 	lnk_input1.gyro_x = (int16_t)data[0];
@@ -113,12 +143,19 @@ static void _update_inputs(void)
 	lnk_input1.accel_y = (int16_t)(data[1]);
 	lnk_input1.accel_z = (int16_t)(data[2]);
 
+	get_mag_data(data);
+
+	lnk_input1.compass_x = (int16_t)(data[0]);
+	lnk_input1.compass_y = (int16_t)(data[1]);
+	lnk_input1.compass_z = (int16_t)(data[2]);
+
 	get_angle_data(data);
 
-	lnk_input1.pitch = (int16_t)(data[0] * 180.0f / 3.14f);
-	lnk_input1.roll = (int16_t)(data[1] * 180.0f / 3.14f);
-	lnk_input1.yaw = (int16_t)(data[2] * 180.0f / 3.14f);
+	lnk_input1.pitch = (int16_t)(data[0] * rad2deg);
+	lnk_input1.roll = (int16_t)(data[1] * rad2deg);
+	lnk_input1.yaw = (int16_t)(data[2] * rad2deg);
 
+	/* HOLDING REGISTERS */
 	lnk_holding1.measuring_duration = get_measuring_duration();
 }
 
@@ -159,22 +196,14 @@ static void _link(void const * argument)
 	lnk_modbus.input_tables = lnk_input_tables;
 	lnk_modbus.holding_tables = lnk_holding_tables;
 
-	lnk_modbus.open = NULL;
-	lnk_modbus.close = NULL;
-	lnk_modbus.read = _modbus_read;
-	lnk_modbus.write = _modbus_write;
-
-	lnk_modbus.lock = NULL;
-
-	lnk_modbus.after_write_table = NULL;
-	lnk_modbus.before_read_table = NULL;
+	lnk_modbus.functions = &lnk_modbus_functions;
 
 	lnk_ticks = osKernelSysTick();
 
 	while (1)
 	{
 		int ret = modbus_io(&lnk_modbus);
-		if (ret == 0)
+		if (ret == MODBUS_SUCCESS)
 		{
 			// OK
 			lnk_holding1.request_count++;

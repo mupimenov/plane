@@ -161,10 +161,10 @@ void stm32l4_uart_dma_rx_handler(struct stm32l4_uart_device *uart)
 	uart->rx_done = true;
 }
 
-static bool _uart_setup(struct block_device *dev, unsigned long parameter, unsigned long value);
-static bool _uart_configure(struct block_device *dev);
-static int _uart_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size);
-static int _uart_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size);
+static bool _uart_setup(struct char_device *dev, unsigned long parameter, unsigned long value);
+static bool _uart_configure(struct char_device *dev);
+static int _uart_read(struct char_device *dev, unsigned char *buffer, unsigned short available_size);
+static int _uart_write(struct char_device *dev, const unsigned char *buffer, unsigned short size);
 
 static void _setup_dma_rx(struct stm32l4_uart_device *uart);
 
@@ -200,7 +200,7 @@ stm32l4_uart_make(	struct stm32l4_uart_device *uart,
 	return true;
 }
 
-bool _uart_setup(struct block_device *dev, unsigned long parameter, unsigned long value)
+bool _uart_setup(struct char_device *dev, unsigned long parameter, unsigned long value)
 {
 	struct stm32l4_uart_device *uart = (struct stm32l4_uart_device *)dev;
 
@@ -238,7 +238,7 @@ bool _uart_setup(struct block_device *dev, unsigned long parameter, unsigned lon
 }
 
 static bool
-_uart_configure(struct block_device *dev)
+_uart_configure(struct char_device *dev)
 {	
 	struct stm32l4_uart_device *uart = (struct stm32l4_uart_device *)dev;
 	USART_TypeDef *reg = (USART_TypeDef *)uart->reg;
@@ -378,7 +378,7 @@ static void _setup_dma_rx(struct stm32l4_uart_device *uart)
 }
 
 static int 
-_uart_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size)
+_uart_read(struct char_device *dev, unsigned char *buffer, unsigned short available_size)
 {
 	volatile int already_read = 0;
 	struct stm32l4_uart_device *uart = (struct stm32l4_uart_device *)dev;
@@ -433,7 +433,7 @@ _uart_read(struct block_device *dev, unsigned long address, unsigned char *buffe
 }
 
 static int 
-_uart_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size)
+_uart_write(struct char_device *dev, const unsigned char *buffer, unsigned short size)
 {
 	volatile unsigned short already_write = 0;
 	struct stm32l4_uart_device *uart = (struct stm32l4_uart_device *)dev;

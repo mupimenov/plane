@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #include "accelerometer.h"
+#include "magneto.h"
 #include "gpio.h"
 #include "spi_device.h"
 
@@ -35,13 +36,13 @@ struct lsm303c_accelerometer {
 };
 
 // REG_SELECTOR
-#define LSM303C_SELECT_REG1								((uint32_t)0x00000001)
-#define LSM303C_SELECT_REG2								((uint32_t)0x00000002)
-#define LSM303C_SELECT_REG3								((uint32_t)0x00000004)
-#define LSM303C_SELECT_REG4								((uint32_t)0x00000008)
-#define LSM303C_SELECT_REG5								((uint32_t)0x00000010)
-#define LSM303C_SELECT_REG6								((uint32_t)0x00000020)
-#define LSM303C_SELECT_FIFO_CTRL_REG					((uint32_t)0x00000040)
+#define LSM303C_ACC_SELECT_REG1								((uint32_t)0x00000001)
+#define LSM303C_ACC_SELECT_REG2								((uint32_t)0x00000002)
+#define LSM303C_ACC_SELECT_REG3								((uint32_t)0x00000004)
+#define LSM303C_ACC_SELECT_REG4								((uint32_t)0x00000008)
+#define LSM303C_ACC_SELECT_REG5								((uint32_t)0x00000010)
+#define LSM303C_ACC_SELECT_REG6								((uint32_t)0x00000020)
+#define LSM303C_ACC_SELECT_FIFO_CTRL_REG					((uint32_t)0x00000040)
 
 // REG1
 #define LSM303C_ACC_HIGH_RESOLUTION_ENABLE      ((uint8_t)0x80)
@@ -116,5 +117,72 @@ struct lsm303c_accelerometer {
 #define LSM303C_ACC_FIFO_BYPASS_TO_NORMAL_MODE	((uint8_t)0xE0)
 
 bool lsm303c_accelerometer_make(struct lsm303c_accelerometer *accel, spi_device_t *dev, struct gpio_pin *cs);
+
+struct lsm303c_magneto {
+	struct magneto_driver interface;
+
+	struct {
+		uint32_t reg_selector;
+
+		uint8_t reg1;
+		uint8_t reg2;
+		uint8_t reg3;
+		uint8_t reg4;
+		uint8_t reg5;
+	} config;
+
+	spi_device_t *dev;
+	struct gpio_pin *cs;
+};
+
+// REG_SELECTOR
+#define LSM303C_MAG_SELECT_REG1								((uint32_t)0x00000001)
+#define LSM303C_MAG_SELECT_REG2								((uint32_t)0x00000002)
+#define LSM303C_MAG_SELECT_REG3								((uint32_t)0x00000004)
+#define LSM303C_MAG_SELECT_REG4								((uint32_t)0x00000008)
+#define LSM303C_MAG_SELECT_REG5								((uint32_t)0x00000010)
+
+// REG1
+#define LSM303C_MAG_TEMP_SENSOR_ENABLE				((uint8_t)0x80)
+#define LSM303C_MAG_LOW_POWER_MODE					((uint8_t)0x00)
+#define LSM303C_MAG_MEDIUM_PERFORMANCE_MODE			((uint8_t)0x20)
+#define LSM303C_MAG_HIGH_PERFORMANCE_MODE			((uint8_t)0x40)
+#define LSM303C_MAG_ULTRA_PERFORMANCE_MODE			((uint8_t)0x60)
+#define LSM303C_MAG_DATA_RATE_0_625HZ				((uint8_t)0x00)
+#define LSM303C_MAG_DATA_RATE_1_25HZ				((uint8_t)0x04)
+#define LSM303C_MAG_DATA_RATE_2_5HZ					((uint8_t)0x08)
+#define LSM303C_MAG_DATA_RATE_5HZ					((uint8_t)0x0C)
+#define LSM303C_MAG_DATA_RATE_10HZ					((uint8_t)0x10)
+#define LSM303C_MAG_DATA_RATE_20HZ					((uint8_t)0x14)
+#define LSM303C_MAG_DATA_RATE_40HZ					((uint8_t)0x18)
+#define LSM303C_MAG_DATA_RATE_80HZ					((uint8_t)0x1C)
+#define LSM303C_MAG_SELF_TEST_ENABLE				((uint8_t)0x01)
+
+// REG2
+#define LSM303C_MAG_FULL_SCALE_DISABLE				((uint8_t)0x00)
+#define LSM303C_MAG_FULL_SCALE_16GAUSS				((uint8_t)0x60)
+#define LSM303C_MAG_REBOOT_MEMORY					((uint8_t)0x08)
+#define LSM303C_MAG_SOFT_RESET						((uint8_t)0x04)
+
+// REG3
+#define LSM303C_MAG_DISABLE_I2C						((uint8_t)0x80)
+#define LSM303C_MAG_LOW_POWER_ENABLE				((uint8_t)0x20)
+#define LSM303C_MAG_SPI_READ_WRITE_ENABLE			((uint8_t)0x04)
+#define LSM303C_MAG_CONTINUOUS_MODE					((uint8_t)0x00)
+#define LSM303C_MAG_SINGLE_MODE						((uint8_t)0x01)
+#define LSM303C_MAG_POWER_DOWN_MODE					((uint8_t)0x03)
+
+// REG4
+#define LSM303C_MAG_Z_AXIS_LOW_POWER_MODE			((uint8_t)0x00)
+#define LSM303C_MAG_Z_AXIS_MEDIUM_PERFORMANCE_MODE	((uint8_t)0x04)
+#define LSM303C_MAG_Z_AXIS_HIGH_PERFORMANCE_MODE	((uint8_t)0x08)
+#define LSM303C_MAG_Z_AXIS_ULTRA_PERFORMANCE_MODE	((uint8_t)0x0C)
+#define LSM303C_MAG_ENDIAN_MSB						((uint8_t)0x02)
+
+// REG5
+#define LSM303C_MAG_CONTINUOUS_UPDATE				((uint8_t)0x00)
+#define LSM303C_MAG_UPDATE_ON_READ					((uint8_t)0x40)
+
+bool lsm303c_magneto_make(struct lsm303c_magneto *mag, spi_device_t *dev, struct gpio_pin *cs);
 
 #endif /* SRC_DRIVERS_LSM303C_H_ */

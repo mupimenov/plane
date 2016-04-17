@@ -9,10 +9,12 @@ DEFINES = -DVERSION=\"$(VERSION)\" -DSTM32L476xx -DUSE_FULL_LL_DRIVER
 
 SRCS = src/drivers/accelerometer.c \
 	src/drivers/block_device.c \
+	src/drivers/char_device.c \
 	src/drivers/gpio.c \
 	src/drivers/gyro.c \
 	src/drivers/l3gd20.c \
 	src/drivers/lsm303c.c \
+	src/drivers/magneto.c \
 	src/drivers/stm32l4_gpio_pin.c \
 	src/drivers/stm32l4_spi_device.c \
 	src/drivers/stm32l4_uart_device.c \

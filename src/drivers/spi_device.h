@@ -1,9 +1,9 @@
 #ifndef __SPI_DEVICE_H
 #define __SPI_DEVICE_H
 
-#include "block_device.h"
+#include "char_device.h"
 
-typedef struct block_device spi_device_t;
+typedef struct char_device spi_device_t;
 
 #define SPI_DEVICE_PARAMETER_CLOCK 0x01
 
@@ -50,9 +50,8 @@ enum spi_config_mode
 
 enum spi_config_direction
 {
-	SPI_DIRECTION_FULL_DUPLEX = 0,
-	SPI_DIRECTION_HALF_DUPLEX_RX = 1,
-	SPI_DIRECTION_HALF_DUPLEX_TX = 2
+	SPI_DIRECTION_2LINES = 0,
+	SPI_DIRECTION_1LINE = 1
 };
 
 #endif

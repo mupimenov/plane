@@ -12,7 +12,7 @@
 
 struct stm32l4_spi_device
 {
-	struct block_device interface;
+	spi_device_t interface;
 
 	struct
 	{

@@ -17,10 +17,10 @@ static const SPI_TypeDef * 			spi_regs[SPI_COUNT] = {
 	SPI3
 };
 
-static bool _spi_setup(struct block_device *dev, unsigned long parameter, unsigned long value);
-static bool _spi_configure(struct block_device *dev);
-static int _spi_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size);
-static int _spi_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size);
+static bool _spi_setup(struct char_device *dev, unsigned long parameter, unsigned long value);
+static bool _spi_configure(struct char_device *dev);
+static int _spi_read(struct char_device *dev, unsigned char *buffer, unsigned short available_size);
+static int _spi_write(struct char_device *dev, const unsigned char *buffer, unsigned short size);
 
 bool
 stm32l4_spi_make(	struct stm32l4_spi_device *spi,
@@ -45,7 +45,7 @@ stm32l4_spi_make(	struct stm32l4_spi_device *spi,
 }
 
 static bool
-_spi_setup(struct block_device *dev, unsigned long parameter, unsigned long value)
+_spi_setup(struct char_device *dev, unsigned long parameter, unsigned long value)
 {
 	struct stm32l4_spi_device *spi = (struct stm32l4_spi_device *)dev;
 
@@ -77,7 +77,7 @@ _spi_setup(struct block_device *dev, unsigned long parameter, unsigned long valu
 }
 
 static bool
-_spi_configure(struct block_device *dev)
+_spi_configure(struct char_device *dev)
 {
 	struct stm32l4_spi_device *spi = (struct stm32l4_spi_device *)dev;
 	SPI_TypeDef *reg = (SPI_TypeDef *)spi->reg;
@@ -89,13 +89,10 @@ _spi_configure(struct block_device *dev)
 	init_struct.BaudRate = LL_SPI_BAUDRATEPRESCALER_DIV16;
 	switch (spi->config.direction)
 	{
-	case SPI_DIRECTION_FULL_DUPLEX:
+	case SPI_DIRECTION_2LINES:
 		init_struct.TransferDirection = LL_SPI_FULL_DUPLEX;
 		break;
-	case SPI_DIRECTION_HALF_DUPLEX_RX:
-		init_struct.TransferDirection = LL_SPI_HALF_DUPLEX_RX;
-		break;
-	case SPI_DIRECTION_HALF_DUPLEX_TX:
+	case SPI_DIRECTION_1LINE:
 		init_struct.TransferDirection = LL_SPI_HALF_DUPLEX_TX;
 		break;
 	default:
@@ -171,7 +168,7 @@ _end_rx_transaction(SPI_TypeDef *reg)
 	LL_SPI_ClearFlag_OVR(reg);
 }
 
-static int _full_duplex_read(struct block_device *dev, unsigned char *buffer, unsigned short available_size)
+static int _full_duplex_read(struct char_device *dev, unsigned char *buffer, unsigned short available_size)
 {
 	struct stm32l4_spi_device *spi = (struct stm32l4_spi_device *)dev;
 	SPI_TypeDef *reg = (SPI_TypeDef *)spi->reg;
@@ -247,7 +244,7 @@ static int _full_duplex_read(struct block_device *dev, unsigned char *buffer, un
 
 	LL_SPI_Disable(reg);
 
-	if (spi->config.direction == SPI_DIRECTION_HALF_DUPLEX_RX)
+	if (spi->config.direction == SPI_DIRECTION_1LINE)
 	{
 		_end_rx_transaction(reg);
 	}
@@ -256,7 +253,7 @@ static int _full_duplex_read(struct block_device *dev, unsigned char *buffer, un
 }
 
 static int
-_spi_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size)
+_spi_read(struct char_device *dev, unsigned char *buffer, unsigned short available_size)
 {
 	struct stm32l4_spi_device *spi = (struct stm32l4_spi_device *)dev;
 	SPI_TypeDef *reg = (SPI_TypeDef *)spi->reg;
@@ -265,8 +262,14 @@ _spi_read(struct block_device *dev, unsigned long address, unsigned char *buffer
 	if (spi == NULL || reg == NULL)
 		return 0;
 
-	if (spi->config.direction == SPI_DIRECTION_FULL_DUPLEX)
+	if (spi->config.direction == SPI_DIRECTION_2LINES)
+	{
 		return _full_duplex_read(dev, buffer, available_size);
+	}
+	else
+	{
+		LL_SPI_SetTransferDirection(reg, LL_SPI_HALF_DUPLEX_RX);
+	}
 
 	if (spi->config.bits > SPI_8_BIT)
 	{
@@ -305,7 +308,7 @@ _spi_read(struct block_device *dev, unsigned long address, unsigned char *buffer
 
 	LL_SPI_Disable(reg);
 
-	if (spi->config.direction == SPI_DIRECTION_HALF_DUPLEX_RX)
+	if (spi->config.direction == SPI_DIRECTION_1LINE)
 	{
 		_end_rx_transaction(reg);
 	}
@@ -328,7 +331,7 @@ _end_tx_transaction(SPI_TypeDef *reg)
 }
 
 static int
-_spi_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size)
+_spi_write(struct char_device *dev, const unsigned char *buffer, unsigned short size)
 {
 	struct stm32l4_spi_device *spi = (struct stm32l4_spi_device *)dev;
 	SPI_TypeDef *reg = (SPI_TypeDef *)spi->reg;
@@ -337,8 +340,10 @@ _spi_write(struct block_device *dev, unsigned long address, const unsigned char 
 	if (spi == NULL || reg == NULL)
 		return 0;
 
-	if (spi->config.direction == SPI_DIRECTION_HALF_DUPLEX_RX)
-		return 0;
+	if (spi->config.direction == SPI_DIRECTION_1LINE)
+	{
+		LL_SPI_SetTransferDirection(reg, LL_SPI_HALF_DUPLEX_TX);
+	}
 
 #if 0
 	if (spi->config.bits >= SPI_8_BIT && size > 1)
@@ -383,7 +388,7 @@ _spi_write(struct block_device *dev, unsigned long address, const unsigned char 
 
 	LL_SPI_Disable(reg);
 
-	if (spi->config.direction == SPI_DIRECTION_FULL_DUPLEX)
+	if (spi->config.direction == SPI_DIRECTION_2LINES)
 	{
 		_end_rx_transaction(reg);
 	}

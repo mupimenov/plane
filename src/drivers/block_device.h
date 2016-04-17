@@ -18,21 +18,21 @@ struct block_device
 #define device_set_close(bd,fn) (bd).close = fn
 
 bool
-device_open(struct block_device *dev);
+block_open(struct block_device *dev);
 
 bool
-device_close(struct block_device *dev);
+block_close(struct block_device *dev);
 
 bool
-device_setup(struct block_device *dev, unsigned long parameter, unsigned long value);
+block_setup(struct block_device *dev, unsigned long parameter, unsigned long value);
 
 bool
-device_configure(struct block_device *dev);
+block_configure(struct block_device *dev);
 
 int 
-device_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size);
+block_read(struct block_device *dev, unsigned long address, unsigned char *buffer, unsigned short available_size);
 
 int 
-device_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size);
+block_write(struct block_device *dev, unsigned long address, const unsigned char *buffer, unsigned short size);
 
 #endif

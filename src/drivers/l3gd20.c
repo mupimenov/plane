@@ -84,7 +84,7 @@ static bool _gyro_io_init(struct l3gd20_gyro *gyro)
 		device_setup(gyro->dev, SPI_DEVICE_PARAMETER_PHASE, SPI_PHASE_0);
 		device_setup(gyro->dev, SPI_DEVICE_PARAMETER_POLARITY, SPI_POLARITY_0);
 		device_setup(gyro->dev, SPI_DEVICE_PARAMETER_MODE, SPI_MODE_MASTER);
-		device_setup(gyro->dev, SPI_DEVICE_PARAMETER_DIRECTION, SPI_DIRECTION_FULL_DUPLEX);
+		device_setup(gyro->dev, SPI_DEVICE_PARAMETER_DIRECTION, SPI_DIRECTION_2LINES);
 
 		if (!device_configure(gyro->dev))
 			break;
@@ -115,10 +115,10 @@ static void _gyro_io_write(struct l3gd20_gyro *gyro, uint8_t address, const uint
 	gpio_clear(gyro->cs);
 
 	/* Send the Address of the indexed register */
-	device_write(gyro->dev, 0, &address, 1);
+	device_write(gyro->dev, &address, 1);
 
 	/* Send the data that will be written into the device (MSB First) */
-	device_write(gyro->dev, 0, data, size);
+	device_write(gyro->dev, data, size);
 
 	/* Set chip select High at the end of the transmission */
 	gpio_set(gyro->cs);
@@ -139,10 +139,10 @@ static void _gyro_io_read(struct l3gd20_gyro *gyro, uint8_t address, uint8_t *da
 	gpio_clear(gyro->cs);
 
 	/* Send the Address of the indexed register */
-	device_write(gyro->dev, 0, &address, 1);
+	device_write(gyro->dev, &address, 1);
 
 	/* Receive the data that will be read from the device (MSB First) */
-	device_read(gyro->dev, 0, data, size);
+	device_read(gyro->dev, data, size);
 
 	/* Set chip select High at the end of the transmission */
 	gpio_set(gyro->cs);

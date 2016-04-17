@@ -26,6 +26,8 @@ enum modbus_request_function {
 	MODBUS_WRITE_MULTIPLE_COILS      	= 0x0F,
 	MODBUS_WRITE_MULTIPLE_REGISTERS 	= 0x10,
 	MODBUS_REPORT_SLAVE_ID           	= 0x11,
+	MODBUS_READ_GENERAL_REFERENCE 		= 0x14,
+	MODBUS_WRITE_GENERAL_REFERENCE 		= 0x15,
 	MODBUS_MASK_WRITE_REGISTER 			= 0x16,
 	MODBUS_WRITE_AND_READ_REGISTERS  	= 0x17
 };
@@ -86,6 +88,8 @@ struct modbus_regs_table {
 	uint16_t *regs;
 };
 
+struct modbus_functions;
+
 struct modbus_instance {
 	// data
 	void *arg;
@@ -100,6 +104,18 @@ struct modbus_instance {
 	const struct modbus_regs_table *input_tables;
 	const struct modbus_regs_table *holding_tables;
 
+	// functions
+	const struct modbus_functions *functions;
+
+	// id
+	uint8_t *id;
+	// address
+	uint8_t address;
+	// status
+	uint32_t error;
+};
+
+struct modbus_functions {
 	// io
 	int (*open)(struct modbus_instance *instance);
 	int (*write)(struct modbus_instance *instance, const uint8_t *packet, uint8_t plen);
@@ -113,12 +129,9 @@ struct modbus_instance {
 	int (*before_read_table)(struct modbus_instance *instance, enum modbus_table table, uint16_t address, uint16_t count);
 	int (*after_write_table)(struct modbus_instance *instance, enum modbus_table table, uint16_t address, uint16_t count);
 
-	// id
-	uint8_t *id;
-	// address
-	uint8_t address;
-	// status
-	uint32_t error;
+	// files
+	int (*read_file)(struct modbus_instance *instance, uint16_t filenum, uint16_t address, uint16_t count, uint8_t *data);
+	int (*write_file)(struct modbus_instance *instance, uint16_t filenum, uint16_t address, uint16_t count, const uint8_t *data);
 };
 
 enum modbus_instance_error {
@@ -132,77 +145,10 @@ enum modbus_instance_error {
 	MODBUS_BAD_COMMAND,
 	MODBUS_BAD_PARAMS,
 	MODBUS_INT
-
 };
 
 #define MODBUS_RETURN(__instance__, __err__) { (__instance__)->error = __err__; return (__err__? -1: 0); }
 
 int modbus_io(struct modbus_instance *instance);
-int modbus_send_error(struct modbus_instance *instance, uint8_t function, uint8_t error);
-
-struct modbus_read_command {
-	uint16_t address;
-	uint16_t count;
-};
-
-int modbus_parse_read_command(const uint8_t *data, uint8_t dlen, struct modbus_read_command *command);
-
-int modbus_read_coils_cmd(struct modbus_instance *instance, struct modbus_request *req);
-int modbus_read_discrete_inputs_cmd(struct modbus_instance *instance, struct modbus_request *req);
-
-int modbus_read_holding_registers_cmd(struct modbus_instance *instance, struct modbus_request *req);
-int modbus_read_input_registers_cmd(struct modbus_instance *instance, struct modbus_request *req);
-
-struct modbus_write_bit_command {
-	uint16_t address;
-	uint16_t data;
-};
-
-int modbus_parse_write_bit_command(const uint8_t *data, uint8_t dlen, struct modbus_write_bit_command *command);
-
-struct modbus_write_reg_command {
-	uint16_t address;
-	uint16_t data;
-};
-
-int modbus_parse_write_reg_command(const uint8_t *data, uint8_t dlen, struct modbus_write_reg_command *command);
-
-int modbus_write_coil_cmd(struct modbus_instance *instance, struct modbus_request *req);
-int modbus_write_register_cmd(struct modbus_instance *instance, struct modbus_request *req);
-
-struct modbus_write_multiple_command {
-	uint16_t address;
-	uint16_t count;
-	uint8_t bytes;
-};
-
-int modbus_parse_write_multiple_command(const uint8_t *data, uint8_t dlen, struct modbus_write_multiple_command *command);
-
-int modbus_write_multiple_coils_cmd(struct modbus_instance *instance, struct modbus_request *req);
-int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, struct modbus_request *req);
-
-int modbus_report_slave_id_cmd(struct modbus_instance *instance, struct modbus_request *req);
-
-struct modbus_mask_write_command {
-	uint16_t address;
-	uint16_t and_mask;
-	uint16_t or_mask;
-};
-
-int modbus_parse_mask_write_reg_command(const uint8_t *data, uint8_t dlen, struct modbus_mask_write_command *command);
-
-int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct modbus_request *req);
-
-struct modbus_write_read_regs_command {
-	uint16_t read_address;
-	uint16_t read_count;
-	uint16_t write_address;
-	uint16_t write_count;
-	uint8_t bytes;
-};
-
-int modbus_parse_write_read_regs_command(const uint8_t *data, uint8_t dlen, struct modbus_write_read_regs_command *command);
-
-int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct modbus_request *req);
 
 #endif /* SRC_LIB_MODBUS_H_ */

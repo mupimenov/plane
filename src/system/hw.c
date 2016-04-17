@@ -24,9 +24,11 @@ static struct stm32l4_gpio_pin uart_pins = GPIO_INSTANCE(GPIOD, GPIO_PIN_5 | GPI
 static struct stm32l4_gpio_pin spi_pins = GPIO_INSTANCE(GPIOD, GPIO_PIN_1 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_MODE_AF_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_HIGH, GPIO_AF5_SPI2);
 static struct stm32l4_gpio_pin l3d20_cs = GPIO_INSTANCE(GPIOD, GPIO_PIN_7, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_HIGH, 0);
 static struct stm32l4_gpio_pin lsm303c_accel_cs = GPIO_INSTANCE(GPIOE, GPIO_PIN_0, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_HIGH, 0);
+static struct stm32l4_gpio_pin lsm303c_mag_cs = GPIO_INSTANCE(GPIOC, GPIO_PIN_0, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_HIGH, 0);
 
 static struct l3gd20_gyro gyro;
 static struct lsm303c_accelerometer accel;
+static struct lsm303c_magneto mag;
 
 #define LINK_BUFFER_SIZE 128
 
@@ -125,6 +127,7 @@ void DMA1_Channel6_IRQHandler(void)
 void hw_mems_init(void)
 {
 	// pins
+	__GPIOC_CLK_ENABLE();
 	__GPIOD_CLK_ENABLE();
 	__GPIOE_CLK_ENABLE();
 
@@ -146,7 +149,7 @@ void hw_mems_init(void)
 		if (!accelerometer_open(&accel.interface))
 			break;
 
-		accel.config.reg_selector = LSM303C_SELECT_REG1;
+		accel.config.reg_selector = LSM303C_ACC_SELECT_REG1;
 		accel.config.reg1 = /*LSM303C_ACC_HIGH_RESOLUTION_ENABLE
 				|*/ LSM303C_ACC_DATA_RATE_400HZ
 				| LSM303C_ACC_CONTINUOUS_UPDATE
@@ -154,31 +157,64 @@ void hw_mems_init(void)
 				| LSM303C_ACC_Y_ENABLE
 				| LSM303C_ACC_Z_ENABLE;
 
-		accel.config.reg_selector |= LSM303C_SELECT_REG2;
+		accel.config.reg_selector |= LSM303C_ACC_SELECT_REG2;
 		accel.config.reg2 = LSM303C_ACC_CUTOFF_DATA_RATE_DIV400
 				| LSM303C_ACC_HIGHPASS_MODE_NORMAL
 				/* | LSM303C_ACC_HIGHPASS_TO_FIFO_ENABLE */;
 
-		accel.config.reg_selector |= LSM303C_SELECT_REG3;
+		accel.config.reg_selector |= LSM303C_ACC_SELECT_REG3;
 		accel.config.reg3 = LSM303C_ACC_FIFO_ENABLE;
 
-		accel.config.reg_selector |= LSM303C_SELECT_REG4;
+		accel.config.reg_selector |= LSM303C_ACC_SELECT_REG4;
 		accel.config.reg4 = LSM303C_ACC_AA_FILTER_BANDWIDTH_400HZ
 				| LSM303C_ACC_FULLSCALE_4G
 				| LSM303C_ACC_SPI_READ_WRITE_ENABLE;
 
-		accel.config.reg_selector |= LSM303C_SELECT_REG5;
+		accel.config.reg_selector |= LSM303C_ACC_SELECT_REG5;
 		accel.config.reg5 = LSM303C_ACC_NO_DECIMATION;
 
 		//accel.config.reg_selector |= LSM303C_SELECT_REG6;
 
-		accel.config.reg_selector |= LSM303C_SELECT_FIFO_CTRL_REG;
+		accel.config.reg_selector |= LSM303C_ACC_SELECT_FIFO_CTRL_REG;
 		accel.config.fifo_ctrl_reg = LSM303C_ACC_FIFO_BYPASS_MODE;
 
 		if (!accelerometer_configure(&accel.interface))
 			break;
 
 		(void)accelerometer_close(&accel.interface);
+
+		// MAG
+		if (1)
+		{
+			if (!lsm303c_magneto_make(&mag, &mems_spi.interface, &lsm303c_mag_cs.interface))
+				break;
+
+			if (!magneto_open(&mag.interface))
+				break;
+
+			mag.config.reg_selector = LSM303C_MAG_SELECT_REG1;
+			mag.config.reg1 = LSM303C_MAG_HIGH_PERFORMANCE_MODE
+					| LSM303C_MAG_DATA_RATE_20HZ;
+
+			mag.config.reg_selector = LSM303C_MAG_SELECT_REG2;
+			mag.config.reg2 = LSM303C_MAG_FULL_SCALE_16GAUSS;
+
+			mag.config.reg_selector = LSM303C_MAG_SELECT_REG3;
+			mag.config.reg3 = LSM303C_MAG_DISABLE_I2C
+					| LSM303C_MAG_SPI_READ_WRITE_ENABLE
+					| LSM303C_MAG_CONTINUOUS_MODE;
+
+			mag.config.reg_selector = LSM303C_MAG_SELECT_REG4;
+			mag.config.reg4 = LSM303C_MAG_Z_AXIS_HIGH_PERFORMANCE_MODE;
+
+			mag.config.reg_selector = LSM303C_MAG_SELECT_REG5;
+			mag.config.reg5 = LSM303C_MAG_CONTINUOUS_UPDATE;
+
+			if (!magneto_configure(&mag.interface))
+				break;
+
+			(void)magneto_close(&mag.interface);
+		}
 
 		// GYRO
 
@@ -241,4 +277,10 @@ struct accelerometer_driver *
 hw_get_accel(void)
 {
 	return (struct accelerometer_driver *)&accel;
+}
+
+struct magneto_driver *
+hw_get_mag(void)
+{
+	return (struct magneto_driver *)&mag;
 }

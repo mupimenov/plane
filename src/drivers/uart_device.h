@@ -1,9 +1,9 @@
 #ifndef __UART_DEVICE_H
 #define __UART_DEVICE_H
 
-#include "block_device.h"
+#include "char_device.h"
 
-typedef struct block_device uart_device_t;
+typedef struct char_device uart_device_t;
 
 #define UART_DEVICE_PARAMETER_BAUDRATE 0x01
 

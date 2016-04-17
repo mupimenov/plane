@@ -6,7 +6,7 @@
 
 struct stm32l4_uart_device
 {
-	struct block_device interface;
+	uart_device_t interface;
 
 	struct {
 		unsigned long baudrate;
