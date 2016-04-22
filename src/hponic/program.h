@@ -2,8 +2,8 @@
 #define PROGRAM_H_
 
 #include <stdint.h>
-#include <stddef.h>
 
-#define PROGRAMS_COUNT 30
+void program_init(void);
+void program_execute(void);
 
 #endif /* PROGRAM_H_ */

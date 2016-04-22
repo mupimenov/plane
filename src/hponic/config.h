@@ -6,6 +6,8 @@
 
 /* IO SLOTS */
 
+#define IOSLOTS_COUNT 60
+
 struct common_io_slot /* empty_io_slot */
 {
 	uint8_t driver;
@@ -63,17 +65,19 @@ struct dht22_humidity_io_slot
 	uint8_t pin;
 };
 
-union abstract_io_slot
-{
-	struct common_io_slot 				common;
-	struct analog_input_io_slot 		analog_input;
-	struct discrete_input_io_slot 		discrete_input;
-	struct discrete_output_io_slot 		discrete_output;
-	struct dht22_temperature_io_slot 	dht22_temperature;
-	struct dht22_humidity_io_slot 		dht22_humidity;
+struct abstract_ioslot
+{	
+	union {
+		struct common_io_slot 				common;
+		struct analog_input_io_slot 		analog_input;
+		struct discrete_input_io_slot 		discrete_input;
+		struct discrete_output_io_slot 		discrete_output;
+		struct dht22_temperature_io_slot 	dht22_temperature;
+		struct dht22_humidity_io_slot 		dht22_humidity;
+	} data;
 };
 
-enum io_slot_driver
+enum ioslot_driver
 {
 	EMPTY_SLOT_DRIVER = 0,
 	ANALOG_INPUT_DRIVER,
@@ -83,9 +87,15 @@ enum io_slot_driver
 	DHT22_HUMIDITY_DRIVER
 };
 
-void read_io_slot(uint8_t num, union abstract_io_slot *io_slot);
+#define ioslot_driver(s) ((s)->data.common.driver)
+#define ioslot_id(s) ((s)->data.common.id)
+
+void read_ioslot(uint8_t num, struct abstract_ioslot *ioslot);
+void read_ioslot_by_id(uint8_t id, struct abstract_ioslot *ioslot);
 
 /* PROGRAMS */
+
+#define PROGRAMS_COUNT 30
 
 struct common_program /* empty_program */
 {
@@ -147,6 +157,8 @@ struct pid_control_program
 	
 	uint8_t input;
 	
+	float need;
+	
 	uint8_t constrains;
 	struct datetime from;
 	struct datetime to;
@@ -158,12 +170,16 @@ struct pid_control_program
 	uint8_t output;	
 };
 
-union abstract_program
+struct abstract_program
 {
-	struct common_program 			common;
-	struct timer_control_program 	timer;
-	struct relay_control_program 	relay;
-	struct pid_control_program 		pid;
+	uint8_t (*output)(struct abstract_program *);
+	
+	union {
+		struct common_program 			common;
+		struct timer_control_program 	timer;
+		struct relay_control_program 	relay;
+		struct pid_control_program 		pid;
+	} data;
 };
 
 enum program_type
@@ -174,7 +190,11 @@ enum program_type
 	PID_CONTROL_PROGRAM
 };
 
+#define program_type(p) ((p)->data.common.type)
+#define program_id(p) ((p)->data.common.id)
+
 void read_program(uint8_t num, union abstract_program *program);
+quint8_t program_count_with_output(uint8_t id);
 
 void config_init(void);
 

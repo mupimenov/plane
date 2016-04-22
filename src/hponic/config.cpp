@@ -50,42 +50,115 @@ static float array_to_float(const uint8_t *arr, int offset)
 	return *((float*)&v);
 }
 
-void read_io_slot(uint8_t num, union abstract_io_slot *io_slot)
+static bool analog_input_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+{	
+	if (arr[0] != ANALOG_INPUT_DRIVER)
+		return false;
+	
+	ioslot->data.analog_input.driver = arr[0];
+	ioslot->data.analog_input.id = arr[1];
+	ioslot->data.analog_input.num = arr[2];
+	ioslot->data.analog_input.k = array_to_float(arr, 3);
+	ioslot->data.analog_input.b = array_to_float(arr, 7);
+	
+	return true;
+}
+
+static bool discrete_input_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+{
+	if (arr[0] != DISCRETE_INPUT_DRIVER)
+		return false;
+	
+	ioslot->data.discrete_input.driver = arr[0];
+	ioslot->data.discrete_input.id = arr[1];
+	ioslot->data.discrete_input.pin = arr[2];
+	ioslot->data.discrete_input.inverse = (arr[3] == 0x01);
+	
+	return true;
+}
+
+static bool discrete_output_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+{
+	if (arr[0] != DISCRETE_OUTPUT_DRIVER)
+		return false;
+	
+	ioslot->data.discrete_output.driver = arr[0];
+	ioslot->data.discrete_output.id = arr[1];
+	ioslot->data.discrete_output.operation = arr[2];
+	ioslot->data.discrete_output.pin = arr[3];
+	ioslot->data.discrete_output.inverse = (arr[4] == 0x01);
+		
+	return true;
+}
+
+static bool dht22_temperature_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+{
+	if (arr[0] != DHT22_TEMPERATURE_DRIVER)
+		return false;
+	
+	ioslot->data.dht22_temperature.driver = arr[0];
+	ioslot->data.dht22_temperature.id = arr[1];
+	ioslot->data.dht22_temperature.pin = arr[2];
+		
+	return true;
+}
+
+static bool dht22_humidity_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+{
+	if (arr[0] != DHT22_HUMIDITY_DRIVER)
+		return false;
+	
+	ioslot->data.dht22_humidity.driver = arr[0];
+	ioslot->data.dht22_humidity.id = arr[1];
+	ioslot->data.dht22_humidity.pin = arr[2];
+		
+	return true;
+}
+
+static bool empty_slot_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+{	
+	ioslot->data.common.driver = EMPTY_SLOT_DRIVER;
+	ioslot->data.common.id = 0;
+		
+	return true;
+}
+
+typedef bool (*ioslot_parser_fn)(uint8_t *, struct abstract_ioslot *);
+
+static const ioslot_parser_fn ioslot_parser[] = {
+	analog_input_parser,
+	discrete_input_parser,
+	discrete_output_parser,
+	dht22_temperature_parser,
+	empty_slot_parser
+};
+
+static const uint8_t ioslot_parser_count = sizeof(ioslot_parser) / sizeof(ioslot_parser[0]);
+
+void read_ioslot(uint8_t num, struct abstract_ioslot *ioslot)
 {
 	uint16_t address = IO_SLOT_START_ADDRESS + num * IO_SLOT_SIZE;
+	uint8_t i;
 	
-	io_slot->common.driver = cfg_file[address];
-	io_slot->common.id = cfg_file[address + 1];
-	
-	switch (io_slot->common.driver)
+	for (i = 0; i < ioslot_parser_count; ++i)
 	{
-	case EMPTY_SLOT_DRIVER:
-		break;
-	case ANALOG_INPUT_DRIVER:
-		io_slot->analog_input.num = cfg_file[address + 2];
-		io_slot->analog_input.k = array_to_float(&cfg_file[address], 3);
-		io_slot->analog_input.b = array_to_float(&cfg_file[address], 7);
-		break;
-	case DISCRETE_INPUT_DRIVER:
-		io_slot->discrete_input.pin = cfg_file[address + 2];
-		io_slot->discrete_input.inverse = (cfg_file[address + 3] == 0x01);
-		break;
-	case DISCRETE_OUTPUT_DRIVER:
-		io_slot->discrete_output.operation = cfg_file[address + 2];
-		io_slot->discrete_output.pin = cfg_file[address + 3];
-		io_slot->discrete_output.inverse = (cfg_file[address + 4] == 0x01);
-		break;
-	case DHT22_TEMPERATURE_DRIVER:
-		io_slot->dht22_temperature.pin = cfg_file[address + 2];
-		break;
-	case DHT22_HUMIDITY_DRIVER:
-		io_slot->dht22_humidity.pin = cfg_file[address + 2];
-		break;
-	default:
-		io_slot->common.driver = EMPTY_SLOT_DRIVER;
-		io_slot->common.id = 0;
-		break;
+		if (ioslot_parser[i](address, ioslot))
+			break;
 	}
+}
+
+void read_ioslot_by_id(uint8_t id, struct abstract_ioslot *ioslot)
+{
+	uint8_t i;
+	
+	for (i = 0; i < IOSLOTS_COUNT; ++i)
+	{
+		read_ioslot(i, ioslot);
+		if (ioslot->common.id == id)
+			return;
+	}
+	
+	empty_slot_parser(0, ioslot);
 }
 
 static void array_to_datetime(const uint8_t *arr, int offset, struct datetime *dt)
@@ -106,47 +179,136 @@ static void array_to_cyclogram(const uint8_t *arr, int offset, struct cyclogram_
 	cyclogram->pause_duration = (uint16_t)arr[offset + 5] | ((uint16_t)arr[offset + 6] << 8);
 }
 
-void read_program(uint8_t num, union abstract_program *program)
+static uint8_t timer_control_output(struct abstract_program *program)
+{
+	return program->data.timer.output;
+}
+
+static bool timer_control_parser(uint8_t *arr, struct abstract_program *program)
+{	
+	if (arr[0] != TIMER_CONTROL_PROGRAM)
+		return false;
+	
+	program->output = timer_control_output;
+	
+	program->data.timer.type = arr[0];
+	program->data.timer.id = arr[1];
+	
+	program->data.timer.constrains = arr[2];
+	array_to_datetime(arr, 3, &program->data.timer.from);
+	array_to_datetime(arr, 9, &program->data.timer.to);
+	array_to_cyclogram(arr, 15, &program->data.timer.cyclogram);
+	program->data.timer.output = arr[22];
+	
+	return true;
+}
+
+static uint8_t relay_control_output(struct abstract_program *program)
+{
+	return program->data.relay.output;
+}
+
+static bool relay_control_parser(uint8_t *arr, struct abstract_program *program)
+{	
+	if (arr[0] != RELAY_CONTROL_PROGRAM)
+		return false;
+	
+	program->output = relay_control_output;
+	
+	program->data.relay.type = arr[0];
+	program->data.relay.id = arr[1];
+	
+	program->data.relay.input = arr[2];
+	program->data.relay.constrains = arr[3];
+	array_to_datetime(arr, 4, &program->data.relay.from);
+	array_to_datetime(arr, 10, &program->data.relay.to);
+	program->data.relay.low_bound = array_to_float(arr, 16);
+	program->data.relay.high_bound = array_to_float(arr, 20);
+	array_to_cyclogram(arr, 24, &program->data.relay.cyclogram);
+	program->data.relay.output = arr[31];
+	
+	return true;
+}
+
+static uint8_t pid_control_output(struct abstract_program *program)
+{
+	return program->data.pid.output;
+}
+
+static bool pid_control_parser(uint8_t *arr, struct abstract_program *program)
+{	
+	if (arr[0] != PID_CONTROL_PROGRAM)
+		return false;
+	
+	program->output = pid_control_output;
+	
+	program->data.pid.type = arr[0];
+	program->data.pid.id = arr[1];
+	
+	program->data.pid.input = arr[2];
+	program->data.pid.constrains = arr[3];
+	array_to_datetime(arr, 4, &program->data.pid.from);
+	array_to_datetime(arr, 10, &program->data.pid.to);
+	program->data.pid.proportional_gain = array_to_float(arr, 16);
+	program->data.pid.integral_gain = array_to_float(arr, 20);
+	program->data.pid.differential_gain = array_to_float(arr, 24);
+	program->data.pid.output = arr[29];
+	
+	return true;
+}
+
+static uint8_t empty_program_output(struct abstract_program *program)
+{
+	return 0;
+}
+
+static bool empty_program_parser(uint8_t *arr, struct abstract_program *program)
+{
+	program->output = empty_program_output;
+	
+	program->data.common.type = EMPTY_PROGRAM;
+	program->data.common.id = 0;
+	
+	return true;
+}
+
+typedef bool (*prog_parser)(uint8_t *, struct abstract_program *);
+
+static const prog_parser program_parser[] = {
+	timer_control_parser,
+	relay_control_parser,
+	pid_control_parser,
+	empty_program_parser
+};
+
+static const uint8_t program_parser_count = sizeof(program_parser) / sizeof(program_parser[0]);
+
+
+void read_program(uint8_t num, struct abstract_program *program)
 {
 	uint16_t address = PROGRAM_START_ADDRESS + num * PROGRAM_SIZE;
+	uint8_t i;
 	
-	program->common.type = cfg_file[address];
-	program->common.id = cfg_file[address + 1];
-	
-	switch (program->common.type)
+	for (i = 0; i < program_parser_count; ++i)
 	{
-	case EMPTY_PROGRAM:
-		break;
-	case TIMER_CONTROL_PROGRAM:
-		program->timer.constrains = cfg_file[address + 2];
-		array_to_datetime(&cfg_file[address], 3, &program->timer.from);
-		array_to_datetime(&cfg_file[address], 9, &program->timer.to);
-		array_to_cyclogram(&cfg_file[address], 15, &program->timer.cyclogram);
-		program->timer.output = cfg_file[address + 22];
-		break;
-	case RELAY_CONTROL_PROGRAM:
-		program->relay.input = cfg_file[address + 2];
-		program->relay.constrains = cfg_file[address + 3];
-		array_to_datetime(&cfg_file[address], 4, &program->relay.from);
-		array_to_datetime(&cfg_file[address], 10, &program->relay.to);
-		program->relay.low_bound = array_to_float(&cfg_file[address], 16);
-		program->relay.high_bound = array_to_float(&cfg_file[address], 20);
-		array_to_cyclogram(&cfg_file[address], 24, &program->relay.cyclogram);
-		program->relay.output = cfg_file[address + 31];
-		break;
-	case PID_CONTROL_PROGRAM:
-		program->pid.input = cfg_file[address + 2];
-		program->pid.constrains = cfg_file[address + 3];
-		array_to_datetime(&cfg_file[address], 4, &program->pid.from);
-		array_to_datetime(&cfg_file[address], 10, &program->pid.to);
-		program->pid.proportional_gain = array_to_float(&cfg_file[address], 16);
-		program->pid.integral_gain = array_to_float(&cfg_file[address], 20);
-		program->pid.differential_gain = array_to_float(&cfg_file[address], 24);
-		program->pid.output = cfg_file[address + 29];
-		break;
-	default:
-		program->common.type = EMPTY_PROGRAM;
-		program->common.id = 0;
-		break;
+		if (program_parser[i](address, program))
+			return;
 	}
+}
+
+quint8_t program_count_with_output(uint8_t id)
+{
+	quint8_t count = 0;
+	quint8_t i;
+	
+	struct abstract_program program;
+	
+	for (i = 0; i < PROGRAMS_COUNT; ++i)
+	{
+		read_program(i, &program);
+		if (program->output(&program) == id)
+			++count;
+	}
+	
+	return count;
 }

@@ -21,7 +21,7 @@ enum cyclogram_type
 struct cyclogram_state
 {
 	uint8_t phase;
-	uint8_t remains;
+	uint16_t remains;
 	uint32_t start;
 };
 
