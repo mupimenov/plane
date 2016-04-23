@@ -73,17 +73,7 @@ static bool datetime_strict_le(struct datetime *dt, struct datetime *point)
 {
 	if (dt->year > point->year)
 		return false;
-	if (dt->month > point->month)
-		return false;
-	if (dt->day > point->day)
-		return false;
-	if (dt->hours > point->hours)
-		return false;
-	if (dt->minutes > point->minutes)
-		return false;
-	if (dt->seconds > point->seconds)
-		return false;
-	return true;
+	return datetime_year_le(dt, point);
 }
 
 bool datetime_in(	struct datetime *dt, 
@@ -96,6 +86,13 @@ bool datetime_in(	struct datetime *dt,
 		return true;
 	case STRICT_EQUALITY:
 		return (datetime_strict_ge(dt, point1) && datetime_strict_le(dt, point2));
-	case EVERY_DAY
+	case EVERY_DAY:
+		return (datetime_day_ge(dt, point1) && datetime_day_le(dt, point2));
+	case EVERY_MONTH:
+		return (datetime_month_ge(dt, point1) && datetime_month_le(dt, point2));
+	case EVERY_YEAR:
+		return (datetime_year_ge(dt, point1) && datetime_year_le(dt, point2));
 	}
+
+	return false;
 }

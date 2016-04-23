@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct datetime
 {
 	uint8_t seconds;
@@ -29,5 +33,9 @@ struct datetime datetime_now(void);
 bool datetime_in(	struct datetime *dt, 
 					struct datetime *point1, struct datetime *point2, 
 					enum time_constrains constrains);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* DATETIME_H_ */

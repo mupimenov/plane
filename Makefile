@@ -4,7 +4,7 @@ VERSION = 0.9.0
 CC = /home/mupimenov/Programs/gcc-arm-none-eabi-4_9-2015q3/bin/arm-none-eabi-gcc
 CCFLAGS = -Wall -O0 -mcpu=cortex-m4 -mthumb -mfloat-abi=softfp -g -g3 -fsingle-precision-constant -mfpu=fpv4-sp-d16
 #-mfpu=fpv4-sp-d16 -nostartfiles
-INCLUDE = -Isrc/config -Isrc/drivers -Isrc/system -Isrc/freertos/include -Isrc/freertos/portable -Isrc/lib -Isrc/os -Isrc/system/hal/include -Isrc/tasks
+INCLUDE = -Isrc/config -Isrc/drivers -Isrc/system -Isrc/freertos/include -Isrc/freertos/portable -Isrc/lib -Isrc/os -Isrc/system/hal/include -Isrc/tasks -Isrc/hponic
 DEFINES = -DVERSION=\"$(VERSION)\" -DSTM32L476xx -DUSE_FULL_LL_DRIVER
 
 SRCS = src/drivers/accelerometer.c \
@@ -53,6 +53,7 @@ SRCS = src/drivers/accelerometer.c \
 	src/system/hal/src/stm32l4xx_hal.c \
 	src/system/hal/src/stm32l4xx_ll_dma.c \
 	src/system/hal/src/stm32l4xx_ll_rcc.c \
+	src/system/hal/src/stm32l4xx_ll_rtc.c \
 	src/system/hal/src/stm32l4xx_ll_spi.c \
 	src/system/hal/src/stm32l4xx_ll_usart.c \
 	src/system/hal/src/stm32l4xx_ll_usb.c \
@@ -65,19 +66,33 @@ SRCS = src/drivers/accelerometer.c \
 	src/tasks/task_link.c \
 	src/tasks/task_measure.c \
 	src/main.c
-	
+
+SRCSPP = src/hponic/arduino.cpp \
+	src/hponic/config.cpp \
+	src/hponic/cyclogram.cpp \
+	src/hponic/datetime.cpp \
+	src/hponic/io.cpp \
+	src/hponic/link.cpp \
+	src/hponic/program.cpp \
+	src/hponic/program_loop.cpp \
+	src/hponic/softpwm.cpp
+
 OBJS = $(subst .c,.o,$(SRCS)) src/system/startup_stm32l476xx.o
+OBJSPP = $(subst .cpp,.opp,$(SRCSPP))
 
 LIBS = -lm 
 LDLAGS  = -Tsrc/system/STM32L476XX.ld -nostartfiles -mthumb -mcpu=cortex-m4 -u _printf_float -u _scanf_float 
 # -L/home/mupimenov/Programs/gcc-arm-none-eabi-4_9-2015q3/arm-none-eabi/lib/thumb 
 # 
 
-$(TARGET):	$(OBJS)
-	$(CC) $(LDLAGS) -o $(TARGET) $(OBJS) $(LIBS) -Wl,-Map=$(TARGET).map
+$(TARGET):	$(OBJS) $(OBJSPP)
+	$(CC) $(LDLAGS) -o $(TARGET) $(OBJS) $(OBJSPP) $(LIBS) -Wl,-Map=$(TARGET).map
 
 %.o: %.c
 	$(CC) $(CCFLAGS) $(INCLUDE) $(DEFINES) -c -o $@ $<
+	
+%.opp: %.cpp
+	$(CC) -x c $(CCFLAGS) $(INCLUDE) $(DEFINES) -c -o $@ $<
 	
 src/system/startup_stm32l476xx.o:
 	$(CC) $(CCFLAGS) $(INCLUDE) $(DEFINES) -c -o $@ src/system/startup_stm32l476xx.s
@@ -85,5 +100,5 @@ src/system/startup_stm32l476xx.o:
 all:	$(TARGET)
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(OBJSPP) $(TARGET)
 	

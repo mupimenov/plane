@@ -1,10 +1,6 @@
 #include "config.h"
 
-#define IO_SLOT_START_ADDRESS 0x0000
-#define IO_SLOT_SIZE 16
-
-#define PROGRAM_START_ADDRESS 0x0400
-#define PROGRAM_SIZE 48
+#include <string.h>
 
 static uint8_t cfg_file[4096];
 
@@ -23,7 +19,7 @@ void config_unlock(void)
 	
 }
 
-void config_read(uint16_d address, uint8_t *data, uint16_t size)
+void config_read(uint16_t address, uint8_t *data, uint16_t size)
 {
 	uint16_t i;
 	for (i = 0; i < size; ++i)
@@ -32,7 +28,7 @@ void config_read(uint16_d address, uint8_t *data, uint16_t size)
 	}
 }
 
-void config_write(uint16_d address, const uint8_t *data, uint16_t size)
+void config_write(uint16_t address, const uint8_t *data, uint16_t size)
 {
 	uint16_t i;
 	for (i = 0; i < size; ++i)
@@ -130,6 +126,7 @@ static const ioslot_parser_fn ioslot_parser[] = {
 	discrete_input_parser,
 	discrete_output_parser,
 	dht22_temperature_parser,
+	dht22_humidity_parser,
 	empty_slot_parser
 };
 
@@ -137,12 +134,15 @@ static const uint8_t ioslot_parser_count = sizeof(ioslot_parser) / sizeof(ioslot
 
 void read_ioslot(uint8_t num, struct abstract_ioslot *ioslot)
 {
-	uint16_t address = IO_SLOT_START_ADDRESS + num * IO_SLOT_SIZE;
+	uint16_t address = IOSLOT_START_ADDRESS + num * IOSLOT_SIZE;
 	uint8_t i;
+	uint8_t arr[IOSLOT_SIZE];
 	
+	memcpy(arr, &cfg_file[address], IOSLOT_SIZE);
+
 	for (i = 0; i < ioslot_parser_count; ++i)
 	{
-		if (ioslot_parser[i](address, ioslot))
+		if (ioslot_parser[i](arr, ioslot))
 			break;
 	}
 }
@@ -154,7 +154,7 @@ void read_ioslot_by_id(uint8_t id, struct abstract_ioslot *ioslot)
 	for (i = 0; i < IOSLOTS_COUNT; ++i)
 	{
 		read_ioslot(i, ioslot);
-		if (ioslot->common.id == id)
+		if (ioslot->data.common.id == id)
 			return;
 	}
 	
@@ -288,25 +288,28 @@ void read_program(uint8_t num, struct abstract_program *program)
 {
 	uint16_t address = PROGRAM_START_ADDRESS + num * PROGRAM_SIZE;
 	uint8_t i;
+	uint8_t arr[PROGRAM_SIZE];
+
+	memcpy(arr, &cfg_file[address], PROGRAM_SIZE);
 	
 	for (i = 0; i < program_parser_count; ++i)
 	{
-		if (program_parser[i](address, program))
+		if (program_parser[i](arr, program))
 			return;
 	}
 }
 
-quint8_t program_count_with_output(uint8_t id)
+uint8_t program_count_with_output(uint8_t id)
 {
-	quint8_t count = 0;
-	quint8_t i;
+	uint8_t count = 0;
+	uint8_t i;
 	
 	struct abstract_program program;
 	
 	for (i = 0; i < PROGRAMS_COUNT; ++i)
 	{
 		read_program(i, &program);
-		if (program->output(&program) == id)
+		if (program.output(&program) == id)
 			++count;
 	}
 	

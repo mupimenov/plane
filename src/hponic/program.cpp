@@ -1,5 +1,13 @@
 #include "program.h"
 
+#include <string.h>
+#include <math.h>
+
+#include "config.h"
+#include "datetime.h"
+#include "cyclogram.h"
+#include "softpwm.h"
+
 #define OFF (0)
 #define ON (1)
 
@@ -55,16 +63,17 @@ static union abstract_program_state program_state[PROGRAMS_COUNT];
 
 void program_init(void)
 {
-	memset(states, 0, sizeof(states));
+	memset(program_state, 0, sizeof(program_state));
 }
 
-static void timer_control_execute(struct timer_program *program, struct timer_state *state);
+static void timer_control_execute(struct timer_control_program *program, struct timer_control_state *state);
 static void relay_control_execute(struct relay_control_program *program, struct relay_control_state *state);
 static void pid_control_execute(struct pid_control_program *program, struct pid_control_state *state);
 
 void program_execute(void)
 {
 	int num;
+
 	for (num = 0; num < PROGRAMS_COUNT; ++num)
 	{
 		struct abstract_program program;
@@ -73,13 +82,13 @@ void program_execute(void)
 		switch (program.data.common.type)
 		{
 		case TIMER_CONTROL_PROGRAM:
-			timer_control_execute(&program.data.timer, &states[num].timer);
+			timer_control_execute(&program.data.timer, &program_state[num].timer);
 			break;
 		case RELAY_CONTROL_PROGRAM:
-			relay_control_execute(&program.data.relay, &states[num].relay);
+			relay_control_execute(&program.data.relay, &program_state[num].relay);
 			break;
 		case PID_CONTROL_PROGRAM:
-			pid_control_execute(&program.data.pid, &states[num].pid);
+			pid_control_execute(&program.data.pid, &program_state[num].pid);
 			break;
 		default:
 			break;
@@ -103,7 +112,7 @@ static void timer_control_execute(struct timer_control_program *program, struct 
 	if (state->phase == TIMER_COMPUTE)
 	{
 		struct datetime now = datetime_now();
-		if (datetime_in(&now, program->from, program->to, program->constrains))
+		if (datetime_in(&now, &program->from, &program->to, (enum time_constrains)program->constrains))
 		{
 			state->phase = TIMER_OUTPUT;
 		}
@@ -111,12 +120,12 @@ static void timer_control_execute(struct timer_control_program *program, struct 
 	
 	if (state->phase == TIMER_OUTPUT)
 	{
-		if (cyclogram_is_stopped(state->cyclogram))
-			cyclogram_start(program->cyclogram, state->cyclogram);
+		if (cyclogram_is_stopped(&state->cyclogram))
+			cyclogram_start(&program->cyclogram, &state->cyclogram);
 		
-		value = cyclogram_step(program->cyclogram, state->cyclogram);
+		value = cyclogram_step(&program->cyclogram, &state->cyclogram);
 		
-		if (cyclogram_is_stopped(state->cyclogram))
+		if (cyclogram_is_stopped(&state->cyclogram))
 			state->phase = TIMER_COMPUTE;
 	}
 	
@@ -144,7 +153,7 @@ static void relay_control_execute(struct relay_control_program *program, struct 
 			int err;
 			struct datetime now = datetime_now();
 			
-			if (!datetime_in(&now, program->from, program->to, program->constrains))
+			if (!datetime_in(&now, &program->from, &program->to, (enum time_constrains)program->constrains))
 				break;
 			
 			input = input_analog(program->input, &err);
@@ -176,12 +185,12 @@ static void relay_control_execute(struct relay_control_program *program, struct 
 	
 	if (state->phase == RELAY_OUTPUT)
 	{
-		if (cyclogram_is_stopped(state->cyclogram))
-			cyclogram_start(program->cyclogram, state->cyclogram);
+		if (cyclogram_is_stopped(&state->cyclogram))
+			cyclogram_start(&program->cyclogram, &state->cyclogram);
 		
-		value = cyclogram_step(program->cyclogram, state->cyclogram);
+		value = cyclogram_step(&program->cyclogram, &state->cyclogram);
 		
-		if (cyclogram_is_stopped(state->cyclogram))
+		if (cyclogram_is_stopped(&state->cyclogram))
 			state->phase = RELAY_COMPUTE;
 	}
 	
@@ -201,7 +210,7 @@ static void pid_control_execute(struct pid_control_program *program, struct pid_
 	uint32_t delta_millis;	
 	
 	delta_millis = millis() - state->last_millis;
-	if (current_millis > step)
+	if (delta_millis > step)
 	{
 		do
 		{
@@ -242,7 +251,7 @@ static void pid_control_execute(struct pid_control_program *program, struct pid_
 			
 			y = proportional + state->integral_sum + differential;
 			
-			state->value = softpwm_step(&softpwm, state->softpwm, y);
+			state->value = softpwm_step(&softpwm, &state->softpwm, y);
 			
 		} while (0);
 	}

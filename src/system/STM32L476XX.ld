@@ -112,7 +112,7 @@ SECTIONS
         __data_end__ = .;
         _edata = .;
 
-    } > SRAM2
+    } > SRAM1
 
     .bss :
     {
@@ -124,7 +124,7 @@ SECTIONS
         . = ALIGN(4);
         __bss_end__ = .;
         _ebss = .;
-    } > SRAM2
+    } > SRAM1
 
     .heap (COPY):
     {

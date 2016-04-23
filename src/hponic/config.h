@@ -4,6 +4,21 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "datetime.h"
+#include "cyclogram.h"
+#include "program.h"
+#include "io.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define IOSLOT_START_ADDRESS 0x0000
+#define IOSLOT_SIZE 16
+
+#define PROGRAM_START_ADDRESS 0x0400
+#define PROGRAM_SIZE 48
+
 /* IO SLOTS */
 
 #define IOSLOTS_COUNT 60
@@ -117,20 +132,6 @@ struct timer_control_program
 	uint8_t output;	
 };
 
-struct timer_control_program
-{
-	uint8_t type;
-	uint8_t id;
-	
-	uint8_t constrains;
-	struct datetime from;
-	struct datetime to;
-	
-	struct cyclogram_params cyclogram;
-	
-	uint8_t output;	
-};
-
 struct relay_control_program
 {
 	uint8_t type;
@@ -193,15 +194,19 @@ enum program_type
 #define program_type(p) ((p)->data.common.type)
 #define program_id(p) ((p)->data.common.id)
 
-void read_program(uint8_t num, union abstract_program *program);
-quint8_t program_count_with_output(uint8_t id);
+void read_program(uint8_t num, struct abstract_program *program);
+uint8_t program_count_with_output(uint8_t id);
 
 void config_init(void);
 
 void config_lock(void);
 void config_unlock(void);
 
-void config_read(uint16_d address, uint8_t *data, uint16_t size);
-void config_write(uint16_d address, const uint8_t *data, uint16_t size);
+void config_read(uint16_t address, uint8_t *data, uint16_t size);
+void config_write(uint16_t address, const uint8_t *data, uint16_t size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CONFIG_H_ */

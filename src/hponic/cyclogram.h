@@ -2,6 +2,11 @@
 #define CYCLOGRAM_H_
 
 #include <stdint.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct cyclogram_params
 {
@@ -40,5 +45,9 @@ uint8_t cyclogram_step(		struct cyclogram_params *params,
 							struct cyclogram_state *state);
 							
 bool cyclogram_is_stopped(struct cyclogram_state *state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CYCLOGRAM_H_ */

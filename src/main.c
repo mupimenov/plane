@@ -15,6 +15,9 @@
 #include "task_link.h"
 #include "task_measure.h"
 
+#include "link.h"
+#include "program_loop.h"
+
 static uint8_t m_stack[1 * 1024] __attribute__((section(".stack"),used));
 static uint8_t m_heap[8 * 1024] __attribute__((section(".heap"),used));
 
@@ -47,8 +50,9 @@ static void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4);
 
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2/*|RCC_PERIPHCLK_RTC*/;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  //PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit);
 
   __PWR_CLK_ENABLE();
@@ -72,8 +76,13 @@ int main(void)
 	SystemClock_Config();
 
 	task_led_init();
+#if 0
 	task_link_init();
 	task_measure_init();
+#else
+	//program_loop_init();
+	//link_init();
+#endif
 
 	osKernelStart();
 

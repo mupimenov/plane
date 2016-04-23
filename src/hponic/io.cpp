@@ -1,6 +1,8 @@
 #include "io.h"
 
 #include <stdbool.h>
+#include <math.h>
+#include <string.h>
 
 #include "config.h"
 
@@ -53,7 +55,7 @@ struct dht22_temperature_state
 	uint8_t id;
 	
 	uint8_t pin;	
-	quint32_t last_millis;
+	uint32_t last_millis;
 	float value;
 };
 
@@ -63,7 +65,7 @@ struct dht22_humidity_state
 	uint8_t id;
 	
 	uint8_t pin;	
-	quint32_t last_millis;
+	uint32_t last_millis;
 	float value;
 };
 
@@ -91,12 +93,27 @@ enum MODE
 
 static struct ioslot_state 			ioslot_state[IOSLOTS_COUNT];
 
+void io_lock(void)
+{
+
+}
+
+void io_unlock(void)
+{
+
+}
+
 void io_init(void)
 {
 	memset(adc_value, 0, sizeof(adc_value));
 }
 
-static void get_adc_values(void)
+uint16_t get_adc_value(uint8_t channel)
+{
+	return adc_value[channel];
+}
+
+static void fill_adc_values(void)
 {
 	uint8_t i;
 	
@@ -159,12 +176,12 @@ static void discrete_input_execute(struct ioslot_state *state, struct abstract_i
 				| (state->data.discrete_input.id & 1);
 			
 		if ((state->data.discrete_input.value == OFF) 
-			&& (state->data.discrete_input.sequence & DISCRETE_INPUT_FILTER_BITS == DISCRETE_INPUT_FILTER_BITS))
+			&& ((state->data.discrete_input.sequence & DISCRETE_INPUT_FILTER_BITS) == DISCRETE_INPUT_FILTER_BITS))
 		{
 			state->data.discrete_input.value = ON;
 		}
 		else if ((state->data.discrete_input.value == ON) 
-			&& (state->data.discrete_input.sequence & DISCRETE_INPUT_FILTER_BITS == 0x0))
+			&& ((state->data.discrete_input.sequence & DISCRETE_INPUT_FILTER_BITS) == 0x0))
 		{
 			state->data.discrete_input.value = OFF;
 		}
@@ -214,7 +231,7 @@ static void discrete_output_execute(struct ioslot_state *state, struct abstract_
 		}
 		else if (ioslot->data.discrete_output.operation == OPERATION_AND)
 		{
-			quint8_t max_count = program_count_with_output(state->data.discrete_output.id);
+			uint8_t max_count = program_count_with_output(state->data.discrete_output.id);
 			state->data.discrete_output.value 
 				= (state->data.discrete_output.count == max_count) ? ON: OFF;
 		}
@@ -225,6 +242,11 @@ static void discrete_output_execute(struct ioslot_state *state, struct abstract_
 
 static void discrete_output_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
 {
+	if (mode == IN)
+	{
+		*value = state->data.discrete_output.value;
+	}
+
 	if (mode == OUT)
 	{
 		state->data.discrete_output.count++;
@@ -233,6 +255,11 @@ static void discrete_output_io_discrete(struct ioslot_state *state, uint8_t mode
 
 static void discrete_output_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
 {
+	if (mode == IN)
+	{
+		*value = (float)state->data.discrete_output.value;
+	}
+
 	if (mode == OUT)
 	{
 		if (*value >= 0.5f)
@@ -447,12 +474,12 @@ void io_execute_in(void)
 	{
 		uint8_t i;
 	
-		get_adc_values();
+		fill_adc_values();
 	
 		for (i = 0; i < IOSLOTS_COUNT; ++i)
 		{
 			struct abstract_ioslot ioslot;
-			read_io_slot(i, &ioslot);
+			read_ioslot(i, &ioslot);
 		
 			ioslot_state[i].execute(&ioslot_state[i], &ioslot, IN);
 		}
@@ -463,6 +490,8 @@ void io_execute_in(void)
 
 void io_execute_out(void)
 {
+	uint8_t i;
+
 	for (i = 0; i < IOSLOTS_COUNT; ++i)
 	{
 		struct abstract_ioslot ioslot;
@@ -474,6 +503,8 @@ void io_execute_out(void)
 
 void ioslot_state_by_id(uint8_t id, struct ioslot_state **state)
 {
+	uint8_t i;
+
 	for (i = 0; i < IOSLOTS_COUNT; ++i)
 	{
 		if (ioslot_state[i].data.common.id == id)
@@ -495,7 +526,7 @@ uint8_t input_discrete(uint8_t id, int *err)
 	if (!state)
 	{
 		*err = 1;
-		return;
+		return value;
 	}
 	
 	state->io_discrete(state, IN, &value);
@@ -511,7 +542,7 @@ float input_analog(uint8_t id, int *err)
 	if (!state)
 	{
 		*err = 1;
-		return;
+		return value;
 	}
 	
 	state->io_analog(state, IN, &value);
@@ -530,4 +561,14 @@ void output_discrete(uint8_t id, uint8_t value, int *err)
 	}
 	
 	state->io_discrete(state, OUT, &value);
+}
+
+float get_ioslot_value(uint8_t num)
+{
+	float value;
+	struct ioslot_state *state = &ioslot_state[num];
+
+	state->io_analog(state, IN, &value);
+
+	return value;
 }

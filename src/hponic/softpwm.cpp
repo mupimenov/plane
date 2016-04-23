@@ -5,12 +5,19 @@
 
 extern unsigned long millis(void);
 
+enum softpwm_phase
+{
+	IMPULSE_IDLE,
+	IMPULSE_HIGH,
+	IMPULSE_LOW
+};
+
 uint8_t softpwm_step(	const struct softpwm_params *params, 
 						struct softpwm_state *state, 
 						float x)
-{	
+{
 	if (x > 1.0f)
-		X = 1.0f;
+		x = 1.0f;
 	else if (x < 0.0f)
 		x = 0.0f;
 	
@@ -39,7 +46,7 @@ uint8_t softpwm_step(	const struct softpwm_params *params,
 		if (state->start + impulse_duration > millis())
 		{
 			state->start = millis();
-			state->phase == IMPULSE_LOW;
+			state->phase = IMPULSE_LOW;
 		}
 		else
 		{
@@ -54,7 +61,7 @@ uint8_t softpwm_step(	const struct softpwm_params *params,
 		if (state->start + pause_duration > millis())
 		{
 			state->start = millis();
-			state->phase == IMPULSE_HIGH;
+			state->phase = IMPULSE_HIGH;
 		}
 		else
 		{

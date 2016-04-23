@@ -5,6 +5,8 @@
  *      Author: mupimenov
  */
 
+#include "hw.h"
+
 #include "stm32l4xx_hal.h"
 
 #include "stm32l4_gpio_pin.h"
@@ -12,6 +14,8 @@
 #include "stm32l4_spi_device.h"
 
 #include "stm32l4xx_ll_dma.h"
+#include "stm32l4xx_ll_rcc.h"
+#include "stm32l4xx_ll_rtc.h"
 
 #include "l3gd20.h"
 #include "lsm303c.h"
@@ -284,3 +288,63 @@ hw_get_mag(void)
 {
 	return (struct magneto_driver *)&mag;
 }
+
+void hw_rtc_init(void)
+{
+	LL_RTC_InitTypeDef init;
+
+	LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSE);
+	LL_RCC_EnableRTC();
+
+	init.HourFormat = LL_RTC_HOURFORMAT_24HOUR;
+	init.AsynchPrescaler = 0;
+	init.SynchPrescaler = 0;
+
+	LL_RTC_Init(RTC, &init);
+}
+
+void hw_rtc_set_date(struct rtc_date *d)
+{
+	LL_RTC_DateTypeDef date;
+	date.Day = d->day;
+	date.Month = d->month;
+	date.Year = d->year;
+
+	LL_RTC_DATE_Init(RTC, LL_RTC_FORMAT_BIN, &date);
+}
+
+struct rtc_date hw_rtc_get_date(void)
+{
+	struct rtc_date d;
+	uint8_t word = LL_RTC_DATE_Get(RTC);
+
+	d.year = word & 0xFF;
+	d.month = (word >> 8) & 0xFF;
+	d.day = (word >> 16) & 0xFF;
+
+	return d;
+}
+
+void hw_rtc_set_time(struct rtc_time *t)
+{
+	LL_RTC_TimeTypeDef time;
+	time.Hours = t->hours;
+	time.Minutes = t->minutes;
+	time.Seconds = t->seconds;
+	time.TimeFormat = LL_RTC_TIME_FORMAT_AM_OR_24;
+
+	LL_RTC_TIME_Init(RTC, LL_RTC_FORMAT_BIN, &time);
+}
+
+struct rtc_time hw_rtc_get_time(void)
+{
+	struct rtc_time t;
+	uint8_t word = LL_RTC_TIME_Get(RTC);
+
+	t.seconds = word & 0xFF;
+	t.minutes = (word >> 8) & 0xFF;
+	t.hours = (word >> 16) & 0xFF;
+
+	return t;
+}
+

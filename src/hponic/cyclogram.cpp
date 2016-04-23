@@ -1,11 +1,14 @@
 #include "cyclogram.h"
 
+#define OFF (0)
+#define ON (1)
+
 extern unsigned long millis(void);
 
 void cyclogram_start(	struct cyclogram_params *params,
 						struct cyclogram_state *state)
 {
-	state->phase == CYCLOGRAM_HIGH;
+	state->phase = CYCLOGRAM_HIGH;
 	state->start = millis();
 	state->remains = params->count;
 
@@ -21,12 +24,12 @@ uint8_t cyclogram_step(		struct cyclogram_params *params,
 	case CYCLOGRAM_SIMPLE:
 		if (state->phase == CYCLOGRAM_HIGH)
 		{
-			state->phase == CYCLOGRAM_IDLE;
+			state->phase = CYCLOGRAM_IDLE;
 			return ON;
 		}
 		else
 		{
-			state->phase == CYCLOGRAM_IDLE;
+			state->phase = CYCLOGRAM_IDLE;
 			return OFF;
 		}
 	case CYCLOGRAM_IMPULSE:
@@ -34,7 +37,7 @@ uint8_t cyclogram_step(		struct cyclogram_params *params,
 		{
 			if (millis() - state->start > params->impulse_duration)
 			{
-				state->phase == CYCLOGRAM_LOW;
+				state->phase = CYCLOGRAM_LOW;
 				state->start = millis();
 			}
 		}
@@ -46,11 +49,11 @@ uint8_t cyclogram_step(		struct cyclogram_params *params,
 				--state->remains;
 				if (!state->remains)
 				{
-					state->phase == CYCLOGRAM_IDLE;
+					state->phase = CYCLOGRAM_IDLE;
 				}
 				else
 				{
-					state->phase == CYCLOGRAM_HIGH;
+					state->phase = CYCLOGRAM_HIGH;
 					state->start = millis();
 				}
 			}
@@ -58,7 +61,7 @@ uint8_t cyclogram_step(		struct cyclogram_params *params,
 		
 		return (uint8_t)(state->phase == CYCLOGRAM_HIGH);
 	default:
-		state->phase == CYCLOGRAM_SIMPLE;
+		state->phase = CYCLOGRAM_SIMPLE;
 		return OFF;
 	}	
 }
