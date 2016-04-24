@@ -76,6 +76,10 @@ static int modbus_after_write_table(struct modbus_instance *instance, enum modbu
 		if (COILS_IN(0x0000, offset, address, count))
 		{
 			// SYNC CLOCK
+			struct rtc_date d = {common_values.now.day, common_values.now.month, common_values.now.year};
+			struct rtc_time t = {common_values.now.hours, common_values.now.minutes, common_values.now.seconds};
+			hw_rtc_set_date(&d);
+			hw_rtc_set_time(&t);
 		}
 	}
 

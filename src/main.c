@@ -80,8 +80,8 @@ int main(void)
 	task_link_init();
 	task_measure_init();
 #else
-	//program_loop_init();
-	//link_init();
+	program_loop_init();
+	link_init();
 #endif
 
 	osKernelStart();

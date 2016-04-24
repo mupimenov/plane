@@ -46,6 +46,8 @@ static void _prog_loop(void const * argument)
 
 void program_loop_init(void)
 {
+	hw_rtc_init();
+
 	config_init();
 	io_init();
 	program_init();

@@ -3,7 +3,7 @@ MEMORY
 { 
   FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 1024K
   SRAM2 (rwx)  : ORIGIN = 0x10000188, LENGTH = 32k - 0x188
-  SRAM1 (rwx)  : ORIGIN = 0x20000000, LENGTH = 96k
+  SRAM1 (rw)  : ORIGIN = 0x20000000, LENGTH = 96k
 }
 
 /* Linker script to place sections and symbol values. Should be used together
@@ -112,7 +112,7 @@ SECTIONS
         __data_end__ = .;
         _edata = .;
 
-    } > SRAM1
+    } > SRAM2
 
     .bss :
     {
@@ -124,7 +124,7 @@ SECTIONS
         . = ALIGN(4);
         __bss_end__ = .;
         _ebss = .;
-    } > SRAM1
+    } > SRAM2
 
     .heap (COPY):
     {

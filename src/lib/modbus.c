@@ -395,7 +395,7 @@ static int modbus_read_discrete_inputs_cmd(struct modbus_instance *instance, str
 }
 
 static int _modbus_find_regs_table(const struct modbus_regs_table *tables,
-		uint16_t address, uint16_t count, uint16_t **regs)
+		uint16_t address, uint16_t count, uint16_t **regs, uint16_t *offset)
 {
 	int i = 0;
 	while (tables[i].address != 0
@@ -406,6 +406,7 @@ static int _modbus_find_regs_table(const struct modbus_regs_table *tables,
 				&& count <= tables[i].count)
 		{
 			*regs = tables[i].regs;
+			*offset = address - tables[i].address;
 			return 0;
 		}
 		++i;
@@ -422,6 +423,7 @@ static int _modbus_read_regs(struct modbus_instance *instance, struct modbus_req
 	size_t len;
 	size_t i;
 	uint16_t *regs;
+	uint16_t offset;
 
 	int ret = modbus_parse_read_command(req->data, req->dlen, &command);
 	if (ret < 0)
@@ -439,7 +441,7 @@ static int _modbus_read_regs(struct modbus_instance *instance, struct modbus_req
 	}
 
 	if (_modbus_find_regs_table((table == MODBUS_TABLE_INPUT_REGISTERS? instance->input_tables: instance->holding_tables),
-			command.address, command.count, &regs) < 0)
+			command.address, command.count, &regs, &offset) < 0)
 	{
 		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_ADDRESS);
 
@@ -459,9 +461,9 @@ static int _modbus_read_regs(struct modbus_instance *instance, struct modbus_req
 	if (functions->lock)
 		functions->lock(instance, table, MODBUS_LOCK);
 
-	for (i = command.address; i < command.address + command.count; i++) {
-		instance->send_buffer[len++] = regs[i] >> 8;
-		instance->send_buffer[len++] = regs[i] & 0xFF;
+	for (i = command.address; i < command.address + command.count; i++, offset++) {
+		instance->send_buffer[len++] = regs[offset] >> 8;
+		instance->send_buffer[len++] = regs[offset] & 0xFF;
 	}
 
 	if (functions->lock)
@@ -576,6 +578,7 @@ static int modbus_write_register_cmd(struct modbus_instance *instance, struct mo
 	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	uint16_t *regs;
+	uint16_t offset;
 
 	int ret = modbus_parse_write_reg_command(req->data, req->dlen, &command);
 	if (ret < 0)
@@ -585,7 +588,7 @@ static int modbus_write_register_cmd(struct modbus_instance *instance, struct mo
 		MODBUS_RETURN(instance, MODBUS_BAD_COMMAND);
 	}
 
-	if (_modbus_find_regs_table(instance->holding_tables, command.address, 1, &regs) < 0)
+	if (_modbus_find_regs_table(instance->holding_tables, command.address, 1, &regs, &offset) < 0)
 	{
 		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_ADDRESS);
 
@@ -595,7 +598,7 @@ static int modbus_write_register_cmd(struct modbus_instance *instance, struct mo
 	if (functions->lock)
 		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
-	regs[command.address] = command.data;
+	regs[offset] = command.data;
 
 	if (functions->lock)
 		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
@@ -711,6 +714,7 @@ static int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, stru
 	size_t i;
 	size_t j;
 	uint16_t *regs;
+	uint16_t offset;
 
 	int ret = modbus_parse_write_multiple_command(req->data, req->dlen, &command);
 	if (ret < 0)
@@ -727,7 +731,7 @@ static int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, stru
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (_modbus_find_regs_table(instance->holding_tables, command.address, command.count, &regs) < 0)
+	if (_modbus_find_regs_table(instance->holding_tables, command.address, command.count, &regs, &offset) < 0)
 	{
 		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_ADDRESS);
 
@@ -737,9 +741,9 @@ static int modbus_write_multiple_regs_cmd(struct modbus_instance *instance, stru
 	if (functions->lock)
 		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
-	for (i = command.address, j = 0; i < command.address + command.count; i++, j += 2) {
+	for (i = command.address, j = 0; i < command.address + command.count; i++, j += 2, offset++) {
 		/* 6 and 7 = first value */
-		regs[i] = (req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j] << 8)
+		regs[offset] = (req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j] << 8)
 							+ req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j + 1];
 	}
 
@@ -837,7 +841,11 @@ static int modbus_read_general_reference(struct modbus_instance *instance, struc
 	}
 
 	len = modbus_start_answer(instance, req->function);
+	instance->send_buffer[len] = (command.count << 1) + 2;
+	++len;
 	instance->send_buffer[len] = (command.count << 1) + 1;
+	++len;
+	instance->send_buffer[len] = 0x06;
 	++len;
 
 	ret = functions->read_file(instance, command.filenum, command.address, command.count, instance->send_buffer + len);
@@ -947,6 +955,7 @@ static int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct mo
 	const struct modbus_functions *functions = instance->functions;
 	size_t len;
 	uint16_t *regs;
+	uint16_t offset;
 	uint16_t data;
 
 	int ret = modbus_parse_mask_write_reg_command(req->data, req->dlen, &command);
@@ -957,7 +966,7 @@ static int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct mo
 		MODBUS_RETURN(instance, MODBUS_BAD_COMMAND);
 	}
 
-	if (_modbus_find_regs_table(instance->holding_tables, command.address, 1, &regs) < 0)
+	if (_modbus_find_regs_table(instance->holding_tables, command.address, 1, &regs, &offset) < 0)
 	{
 		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_ADDRESS);
 
@@ -967,9 +976,9 @@ static int modbus_mask_write_reg_cmd(struct modbus_instance *instance, struct mo
 	if (functions->lock)
 		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
-	data = regs[command.address];
+	data = regs[offset];
 	data = (data & command.and_mask) | (command.or_mask & (~command.and_mask));
-	regs[command.address] = data;
+	regs[offset] = data;
 
 	if (functions->lock)
 		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_UNLOCK);
@@ -1020,7 +1029,9 @@ static int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct m
 	size_t i;
 	size_t j;
 	uint16_t *write_regs;
+	uint16_t write_offset;
 	uint16_t *read_regs;
+	uint16_t read_offset;
 
 	int ret = modbus_parse_write_read_regs_command(req->data, req->dlen, &command);
 	if (ret < 0)
@@ -1039,8 +1050,8 @@ static int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct m
 		MODBUS_RETURN(instance, MODBUS_BAD_PARAMS);
 	}
 
-	if (_modbus_find_regs_table(instance->holding_tables, command.read_address, command.read_count, &read_regs) < 0
-			|| _modbus_find_regs_table(instance->holding_tables, command.write_address, command.write_count, &write_regs) < 0)
+	if (_modbus_find_regs_table(instance->holding_tables, command.read_address, command.read_count, &read_regs, &read_offset) < 0
+			|| _modbus_find_regs_table(instance->holding_tables, command.write_address, command.write_count, &write_regs, &write_offset) < 0)
 	{
 		modbus_send_error(instance, req->function, MODBUS_ERROR_ILLEGAL_DATA_ADDRESS);
 
@@ -1060,14 +1071,14 @@ static int modbus_write_read_regs_cmd(struct modbus_instance *instance, struct m
 	if (functions->lock)
 		functions->lock(instance, MODBUS_TABLE_HOLDING_REGISTERS, MODBUS_LOCK);
 
-	for (i = command.write_address, j = 0; i < command.write_address + command.write_count; i++, j += 2) {
-		write_regs[i] = (req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j] << 8) +
+	for (i = command.write_address, j = 0; i < command.write_address + command.write_count; i++, j += 2, write_offset++) {
+		write_regs[write_offset] = (req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j] << 8) +
 				req->data[MODBUS_WRITE_MULTIPLE_DATA_OFFSET + j + 1];
 	}
 
-	for (i = command.read_address; i < command.read_address + command.read_count; i++) {
-		instance->send_buffer[len++] = read_regs[i] >> 8;
-		instance->send_buffer[len++] = read_regs[i] & 0xFF;
+	for (i = command.read_address; i < command.read_address + command.read_count; i++, read_offset++) {
+		instance->send_buffer[len++] = read_regs[read_offset] >> 8;
+		instance->send_buffer[len++] = read_regs[read_offset] & 0xFF;
 	}
 
 	if (functions->lock)

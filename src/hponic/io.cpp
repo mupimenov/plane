@@ -108,11 +108,6 @@ void io_init(void)
 	memset(adc_value, 0, sizeof(adc_value));
 }
 
-uint16_t get_adc_value(uint8_t channel)
-{
-	return adc_value[channel];
-}
-
 static void fill_adc_values(void)
 {
 	uint8_t i;
@@ -481,7 +476,8 @@ void io_execute_in(void)
 			struct abstract_ioslot ioslot;
 			read_ioslot(i, &ioslot);
 		
-			ioslot_state[i].execute(&ioslot_state[i], &ioslot, IN);
+			if (ioslot_state[i].execute)
+				ioslot_state[i].execute(&ioslot_state[i], &ioslot, IN);
 		}
 	
 		get_dht22_values();
@@ -497,7 +493,8 @@ void io_execute_out(void)
 		struct abstract_ioslot ioslot;
 		read_ioslot(i, &ioslot);
 		
-		ioslot_state[i].execute(&ioslot_state[i], &ioslot, OUT);
+		if (ioslot_state[i].execute)
+			ioslot_state[i].execute(&ioslot_state[i], &ioslot, OUT);
 	}
 }
 
@@ -529,7 +526,8 @@ uint8_t input_discrete(uint8_t id, int *err)
 		return value;
 	}
 	
-	state->io_discrete(state, IN, &value);
+	if (state->io_discrete)
+		state->io_discrete(state, IN, &value);
 	return value;
 }
 
@@ -545,7 +543,8 @@ float input_analog(uint8_t id, int *err)
 		return value;
 	}
 	
-	state->io_analog(state, IN, &value);
+	if (state->io_analog)
+		state->io_analog(state, IN, &value);
 	return value;
 }
 
@@ -560,15 +559,22 @@ void output_discrete(uint8_t id, uint8_t value, int *err)
 		return;
 	}
 	
-	state->io_discrete(state, OUT, &value);
+	if (state->io_discrete)
+		state->io_discrete(state, OUT, &value);
+}
+
+uint16_t get_adc_value(uint8_t channel)
+{
+	return adc_value[channel];
 }
 
 float get_ioslot_value(uint8_t num)
 {
-	float value;
+	float value = NAN;
 	struct ioslot_state *state = &ioslot_state[num];
 
-	state->io_analog(state, IN, &value);
+	if (state->io_analog)
+		state->io_analog(state, IN, &value);
 
 	return value;
 }

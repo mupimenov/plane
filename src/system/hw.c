@@ -34,7 +34,7 @@ static struct l3gd20_gyro gyro;
 static struct lsm303c_accelerometer accel;
 static struct lsm303c_magneto mag;
 
-#define LINK_BUFFER_SIZE 128
+#define LINK_BUFFER_SIZE 512
 
 FIFO_STATIC(link_fifo, link_buffer, LINK_BUFFER_SIZE);
 static struct stm32l4_uart_device link_uart;
@@ -296,16 +296,14 @@ void hw_rtc_init(void)
 	LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSE);
 	LL_RCC_EnableRTC();
 
-	init.HourFormat = LL_RTC_HOURFORMAT_24HOUR;
-	init.AsynchPrescaler = 0;
-	init.SynchPrescaler = 0;
-
+	LL_RTC_StructInit(&init);
 	LL_RTC_Init(RTC, &init);
 }
 
 void hw_rtc_set_date(struct rtc_date *d)
 {
 	LL_RTC_DateTypeDef date;
+	date.WeekDay = LL_RTC_WEEKDAY_SATURDAY;
 	date.Day = d->day;
 	date.Month = d->month;
 	date.Year = d->year;
@@ -316,11 +314,11 @@ void hw_rtc_set_date(struct rtc_date *d)
 struct rtc_date hw_rtc_get_date(void)
 {
 	struct rtc_date d;
-	uint8_t word = LL_RTC_DATE_Get(RTC);
+	uint32_t word = LL_RTC_DATE_Get(RTC);
 
-	d.year = word & 0xFF;
-	d.month = (word >> 8) & 0xFF;
-	d.day = (word >> 16) & 0xFF;
+	d.year = __LL_RTC_CONVERT_BCD2BIN(word & 0xFF);
+	d.month = __LL_RTC_CONVERT_BCD2BIN((word >> 8) & 0xFF);
+	d.day = __LL_RTC_CONVERT_BCD2BIN((word >> 16) & 0xFF);
 
 	return d;
 }
@@ -339,11 +337,11 @@ void hw_rtc_set_time(struct rtc_time *t)
 struct rtc_time hw_rtc_get_time(void)
 {
 	struct rtc_time t;
-	uint8_t word = LL_RTC_TIME_Get(RTC);
+	uint32_t word = LL_RTC_TIME_Get(RTC);
 
-	t.seconds = word & 0xFF;
-	t.minutes = (word >> 8) & 0xFF;
-	t.hours = (word >> 16) & 0xFF;
+	t.seconds = __LL_RTC_CONVERT_BCD2BIN(word & 0xFF);
+	t.minutes = __LL_RTC_CONVERT_BCD2BIN((word >> 8) & 0xFF);
+	t.hours = __LL_RTC_CONVERT_BCD2BIN((word >> 16) & 0xFF);
 
 	return t;
 }
