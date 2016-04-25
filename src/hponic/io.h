@@ -19,6 +19,8 @@ float input_analog(uint8_t id, int *err);
 
 void output_discrete(uint8_t id, uint8_t value, int *err);
 
+#define ADC_CHANNELS_COUNT 16
+
 uint16_t get_adc_value(uint8_t channel);
 float get_ioslot_value(uint8_t num);
 

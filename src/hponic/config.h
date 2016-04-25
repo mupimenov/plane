@@ -23,13 +23,13 @@ extern "C" {
 
 #define IOSLOTS_COUNT 60
 
-struct common_io_slot /* empty_io_slot */
+struct common_ioslot /* empty_ioslot */
 {
 	uint8_t driver;
 	uint8_t id;
 };
 
-struct analog_input_io_slot
+struct analog_input_ioslot
 {
 	uint8_t driver;
 	uint8_t id;
@@ -39,7 +39,7 @@ struct analog_input_io_slot
 	float b;
 };
 
-struct discrete_input_io_slot
+struct discrete_input_ioslot
 {
 	uint8_t driver;
 	uint8_t id;
@@ -48,7 +48,7 @@ struct discrete_input_io_slot
 	bool inverse;
 };
 
-struct discrete_output_io_slot
+struct discrete_output_ioslot
 {
 	uint8_t driver;
 	uint8_t id;
@@ -64,7 +64,7 @@ enum discrete_output_operation
 	OPERATION_AND
 };
 
-struct dht22_temperature_io_slot
+struct dht22_temperature_ioslot
 {
 	uint8_t driver;
 	uint8_t id;
@@ -72,7 +72,15 @@ struct dht22_temperature_io_slot
 	uint8_t pin;
 };
 
-struct dht22_humidity_io_slot
+struct dht22_humidity_ioslot
+{
+	uint8_t driver;
+	uint8_t id;
+	
+	uint8_t pin;
+};
+
+struct dallas_temperature_ioslot
 {
 	uint8_t driver;
 	uint8_t id;
@@ -83,12 +91,13 @@ struct dht22_humidity_io_slot
 struct abstract_ioslot
 {	
 	union {
-		struct common_io_slot 				common;
-		struct analog_input_io_slot 		analog_input;
-		struct discrete_input_io_slot 		discrete_input;
-		struct discrete_output_io_slot 		discrete_output;
-		struct dht22_temperature_io_slot 	dht22_temperature;
-		struct dht22_humidity_io_slot 		dht22_humidity;
+		struct common_ioslot 				common;
+		struct analog_input_ioslot 			analog_input;
+		struct discrete_input_ioslot 		discrete_input;
+		struct discrete_output_ioslot 		discrete_output;
+		struct dht22_temperature_ioslot 	dht22_temperature;
+		struct dht22_humidity_ioslot 		dht22_humidity;
+		struct dallas_temperature_ioslot 	dallas_temperature;
 	} data;
 };
 
@@ -99,7 +108,8 @@ enum ioslot_driver
 	DISCRETE_INPUT_DRIVER,
 	DISCRETE_OUTPUT_DRIVER,
 	DHT22_TEMPERATURE_DRIVER,
-	DHT22_HUMIDITY_DRIVER
+	DHT22_HUMIDITY_DRIVER,
+	DALLAS_TEMPERATURE_DRIVER
 };
 
 #define ioslot_driver(s) ((s)->data.common.driver)
@@ -148,6 +158,7 @@ struct relay_control_program
 	
 	struct cyclogram_params cyclogram;
 	
+	uint8_t inverse;
 	uint8_t output;	
 };
 
@@ -158,17 +169,18 @@ struct pid_control_program
 	
 	uint8_t input;
 	
-	float need;
-	
 	uint8_t constrains;
 	struct datetime from;
 	struct datetime to;
+	
+	float desired;
 	
 	float proportional_gain;
 	float integral_gain;
 	float differential_gain;
 	
-	uint8_t output;	
+	uint8_t inverse;
+	uint8_t output;
 };
 
 struct abstract_program

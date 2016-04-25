@@ -16,6 +16,8 @@ uint8_t softpwm_step(	const struct softpwm_params *params,
 						struct softpwm_state *state, 
 						float x)
 {
+	uint8_t value = OFF;
+	
 	if (x > 1.0f)
 		x = 1.0f;
 	else if (x < 0.0f)
@@ -24,13 +26,17 @@ uint8_t softpwm_step(	const struct softpwm_params *params,
 	if (x < params->duty_min)
 	{
 		state->phase = IMPULSE_IDLE;
-		return OFF;
+		
+		value = OFF;
+		goto done;
 	}
 	
 	if (x > params->duty_max)
 	{
 		state->phase = IMPULSE_IDLE;
-		return ON;
+		
+		value = ON;
+		goto done;
 	}
 	
 	if (state->phase == IMPULSE_IDLE)
@@ -47,10 +53,14 @@ uint8_t softpwm_step(	const struct softpwm_params *params,
 		{
 			state->start = millis();
 			state->phase = IMPULSE_LOW;
+			
+			value = OFF;
+			goto done;
 		}
 		else
 		{
-			return ON;
+			value = ON;
+			goto done;
 		}
 	}
 	
@@ -62,12 +72,17 @@ uint8_t softpwm_step(	const struct softpwm_params *params,
 		{
 			state->start = millis();
 			state->phase = IMPULSE_HIGH;
+			
+			value = ON;
+			goto done;
 		}
 		else
 		{
-			return OFF;
+			value = OFF;
+			goto done;
 		}
 	}
-
-	return OFF;
+	
+done:
+	return value;
 }

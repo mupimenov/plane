@@ -4,9 +4,9 @@
 #include <math.h>
 #include <string.h>
 
-#include "config.h"
+#include "cmsis_os.h"
 
-#define ADC_CHANNELS_COUNT 16
+#include "config.h"
 
 #define DISCRETE_INPUT_FILTER_BITS 0x7
 
@@ -69,6 +69,16 @@ struct dht22_humidity_state
 	float value;
 };
 
+struct dallas_temperature_state
+{
+	uint8_t driver;
+	uint8_t id;
+	
+	uint8_t pin;	
+	uint32_t last_millis;
+	float value;
+};
+
 struct ioslot_state
 {
 	void (*execute)(struct ioslot_state *, struct abstract_ioslot *ioslot, uint8_t mode);
@@ -82,6 +92,7 @@ struct ioslot_state
 		struct discrete_output_state 	discrete_output;
 		struct dht22_temperature_state 	dht22_temperature;
 		struct dht22_humidity_state 	dht22_humidity;
+		struct dallas_temperature_state dallas_temperature;
 	} data;
 };
 
@@ -92,20 +103,22 @@ enum MODE
 };
 
 static struct ioslot_state 			ioslot_state[IOSLOTS_COUNT];
+static osMutexId 					mutex;
 
 void io_lock(void)
 {
-
+	osMutexWait(mutex, osWaitForever);
 }
 
 void io_unlock(void)
 {
-
+	osMutexRelease(mutex);
 }
 
 void io_init(void)
 {
 	memset(adc_value, 0, sizeof(adc_value));
+	mutex = osMutexCreate(NULL);
 }
 
 static void fill_adc_values(void)
@@ -230,7 +243,8 @@ static void discrete_output_execute(struct ioslot_state *state, struct abstract_
 			state->data.discrete_output.value 
 				= (state->data.discrete_output.count == max_count) ? ON: OFF;
 		}
-			
+		
+		// OUT AND CLEAR
 		state->data.discrete_output.count = 0;
 	}
 }
@@ -283,7 +297,7 @@ static void dht22_temperature_execute(struct ioslot_state *state, struct abstrac
 {
 	if (mode == IN)
 	{
-		
+		state->data.dht22_temperature.value = 20.0f;
 	}
 }
 
@@ -325,7 +339,7 @@ static void dht22_humidity_execute(struct ioslot_state *state, struct abstract_i
 {
 	if (mode == IN)
 	{
-		
+		state->data.dht22_humidity.value = 60.0f;
 	}
 }
 
@@ -393,7 +407,7 @@ static void get_dht22_values(void)
 	bool dht22_requested = false;
 	
 	static uint8_t dht22_next_num = 0;
-	static const uint32_t dht22_period = 2000000UL;
+	static const uint32_t dht22_period = 2000UL;
 	
 	for (i = 0; i < IOSLOTS_COUNT; ++i)
 	{
@@ -432,6 +446,100 @@ static void get_dht22_values(void)
 	}
 }
 
+/* DALLAS TEMPERATURE */
+
+static void dallas_temperature_execute(struct ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+{
+	if (mode == IN)
+	{
+		state->data.dallas_temperature.value = 20.0f;
+	}
+}
+
+static void dallas_temperature_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
+{
+	if (mode == IN)
+	{
+		*value = 0;
+	}
+}
+
+static void dallas_temperature_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
+{
+	if (mode == IN)
+	{
+		*value = state->data.dallas_temperature.value;
+	}
+}
+
+static bool prepare_dallas_temperature(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+{
+	if (ioslot->data.common.driver != DALLAS_TEMPERATURE_DRIVER)
+		return false;
+	
+	state->execute = dallas_temperature_execute;
+	state->io_discrete = dallas_temperature_io_discrete;
+	state->io_analog = dallas_temperature_io_analog;
+	
+	state->data.dallas_temperature.driver = ioslot->data.dallas_temperature.driver;
+	state->data.dallas_temperature.id = ioslot->data.dallas_temperature.id;
+	state->data.dallas_temperature.pin = ioslot->data.dallas_temperature.pin;
+	
+	return true;
+}
+
+static void get_dallas_values(void)
+{
+	uint8_t i;
+	bool dallas_requested = false;
+	
+	static uint8_t dallas_next_num = 0;
+	static const uint32_t dallas_period = 2000L;
+	
+	for (i = 0; i < IOSLOTS_COUNT; ++i)
+	{
+		if (ioslot_state[i].data.common.driver == DALLAS_TEMPERATURE_DRIVER)
+		{
+			if (i >= dallas_next_num)
+			{
+				uint32_t now = millis();
+				uint8_t pin = ioslot_state[i].data.dallas_temperature.pin;
+				uint32_t last_millis = ioslot_state[i].data.dallas_temperature.last_millis;
+				
+				if (last_millis + dallas_period > now
+					|| now < last_millis)
+				{
+					float temperature = 10.0f + i * 0.5f;
+					
+					ioslot_state[i].data.dallas_temperature.last_millis = now;
+					ioslot_state[i].data.dallas_temperature.value = temperature;
+					
+					dallas_requested = true;
+					dallas_next_num = i + 1;
+					break;
+				}
+			}
+		}
+	}
+	
+	if (!dallas_requested)
+	{
+		dallas_next_num = 0;
+	}
+}
+
+static bool prepare_empty_slot(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+{	
+	state->execute = NULL;
+	state->io_discrete = NULL;
+	state->io_analog = NULL;
+	
+	state->data.common.driver = EMPTY_SLOT_DRIVER;
+	state->data.common.id = 0;
+	
+	return true;
+}
+
 typedef bool (*prep_ioslot_fn)(struct ioslot_state *, struct abstract_ioslot *);
 
 static const prep_ioslot_fn  prepare_ioslot[] = {
@@ -439,7 +547,10 @@ static const prep_ioslot_fn  prepare_ioslot[] = {
 	prepare_discrete_input,
 	prepare_discrete_output,
 	prepare_dht22_temperature,
-	prepare_dht22_humidity
+	prepare_dht22_humidity,
+	prepare_dallas_temperature,
+	
+	prepare_empty_slot
 };
 
 static const uint8_t prepare_ioslot_count = sizeof(prepare_ioslot) / sizeof(prepare_ioslot[0]);
@@ -465,6 +576,7 @@ static void io_prepare(void)
 
 void io_execute_in(void)
 {	
+	io_lock();
 	io_prepare();
 	{
 		uint8_t i;
@@ -481,21 +593,26 @@ void io_execute_in(void)
 		}
 	
 		get_dht22_values();
+		get_dallas_values();
 	}
+	io_unlock();
 }
 
 void io_execute_out(void)
 {
-	uint8_t i;
-
-	for (i = 0; i < IOSLOTS_COUNT; ++i)
+	io_lock();
 	{
-		struct abstract_ioslot ioslot;
-		read_ioslot(i, &ioslot);
-		
-		if (ioslot_state[i].execute)
-			ioslot_state[i].execute(&ioslot_state[i], &ioslot, OUT);
+		uint8_t i;
+		for (i = 0; i < IOSLOTS_COUNT; ++i)
+		{
+			struct abstract_ioslot ioslot;
+			read_ioslot(i, &ioslot);
+			
+			if (ioslot_state[i].execute)
+				ioslot_state[i].execute(&ioslot_state[i], &ioslot, OUT);
+		}
 	}
+	io_unlock();
 }
 
 void ioslot_state_by_id(uint8_t id, struct ioslot_state **state)

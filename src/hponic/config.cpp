@@ -2,21 +2,25 @@
 
 #include <string.h>
 
-static uint8_t cfg_file[4096];
+#include "cmsis_os.h"
+
+static uint8_t 						cfg_file[4096];
+static osMutexId 					mutex;
 
 void config_init(void)
 {
 	memset(cfg_file, 0, sizeof(cfg_file));
+	mutex = osMutexCreate(NULL);
 }
 
 void config_lock(void)
 {
-	
+	osMutexWait(mutex, osWaitForever);
 }
 
 void config_unlock(void)
 {
-	
+	osMutexRelease(mutex);
 }
 
 void config_read(uint16_t address, uint8_t *data, uint16_t size)
@@ -47,7 +51,7 @@ static float array_to_float(const uint8_t *arr, int offset)
 }
 
 static bool analog_input_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
-{	
+{
 	if (arr[0] != ANALOG_INPUT_DRIVER)
 		return false;
 	
@@ -111,6 +115,18 @@ static bool dht22_humidity_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
 	return true;
 }
 
+static bool dallas_temperature_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+{
+	if (arr[0] != DALLAS_TEMPERATURE_DRIVER)
+		return false;
+	
+	ioslot->data.dallas_temperature.driver = arr[0];
+	ioslot->data.dallas_temperature.id = arr[1];
+	ioslot->data.dallas_temperature.pin = arr[2];
+		
+	return true;
+}
+
 static bool empty_slot_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
 {	
 	ioslot->data.common.driver = EMPTY_SLOT_DRIVER;
@@ -127,6 +143,7 @@ static const ioslot_parser_fn ioslot_parser[] = {
 	discrete_output_parser,
 	dht22_temperature_parser,
 	dht22_humidity_parser,
+	dallas_temperature_parser,
 	empty_slot_parser
 };
 
@@ -225,7 +242,8 @@ static bool relay_control_parser(uint8_t *arr, struct abstract_program *program)
 	program->data.relay.low_bound = array_to_float(arr, 16);
 	program->data.relay.high_bound = array_to_float(arr, 20);
 	array_to_cyclogram(arr, 24, &program->data.relay.cyclogram);
-	program->data.relay.output = arr[31];
+	program->data.relay.inverse = arr[31] == 0x01? 1: 0;
+	program->data.relay.output = arr[32];
 	
 	return true;
 }
@@ -249,10 +267,12 @@ static bool pid_control_parser(uint8_t *arr, struct abstract_program *program)
 	program->data.pid.constrains = arr[3];
 	array_to_datetime(arr, 4, &program->data.pid.from);
 	array_to_datetime(arr, 10, &program->data.pid.to);
-	program->data.pid.proportional_gain = array_to_float(arr, 16);
-	program->data.pid.integral_gain = array_to_float(arr, 20);
-	program->data.pid.differential_gain = array_to_float(arr, 24);
-	program->data.pid.output = arr[29];
+	program->data.pid.desired = array_to_float(arr, 16);
+	program->data.pid.proportional_gain = array_to_float(arr, 20);
+	program->data.pid.integral_gain = array_to_float(arr, 24);
+	program->data.pid.differential_gain = array_to_float(arr, 28);
+	program->data.pid.inverse = arr[32] == 0x01? 1: 0;
+	program->data.pid.output = arr[33];
 	
 	return true;
 }

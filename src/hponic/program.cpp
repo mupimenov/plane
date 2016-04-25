@@ -177,8 +177,16 @@ static void relay_control_execute(struct relay_control_program *program, struct 
 				state->value = OFF;
 			}
 			
-			if (state->value == ON)
-				state->phase = RELAY_OUTPUT;
+			if (!program->inverse)
+			{
+				if (state->value == ON)
+					state->phase = RELAY_OUTPUT;
+			}
+			else
+			{
+				if (state->value == OFF)
+					state->phase = RELAY_OUTPUT;
+			}
 			
 		} while (0);
 	}
@@ -203,11 +211,11 @@ static void pid_control_execute(struct pid_control_program *program, struct pid_
 {
 	const uint32_t step = 10;
 	const struct softpwm_params softpwm = {
-		5, 0.2f, 0.8f
+		5 /* seconds */, 0.2f, 0.8f
 	};
 	
-	int err;	
-	uint32_t delta_millis;	
+	int err;
+	uint32_t delta_millis;
 	
 	delta_millis = millis() - state->last_millis;
 	if (delta_millis > step)
@@ -226,7 +234,7 @@ static void pid_control_execute(struct pid_control_program *program, struct pid_
 			if (err)
 				break;
 			
-			dx = program->need - x;
+			dx = program->desired - x;
 			
 			proportional = program->proportional_gain * dx;
 			if (proportional > 1.0f)
@@ -250,6 +258,10 @@ static void pid_control_execute(struct pid_control_program *program, struct pid_
 				differential = -1.0f;
 			
 			y = proportional + state->integral_sum + differential;
+			if (program->inverse)
+			{
+				y *= -1.0f;
+			}
 			
 			state->value = softpwm_step(&softpwm, &state->softpwm, y);
 			
