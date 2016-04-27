@@ -13,6 +13,8 @@
 #define OFF (0)
 #define ON (1)
 
+#define UNKNOWN_VALUE 0xFF
+
 extern unsigned long millis(void);
 
 static uint16_t adc_value[ADC_CHANNELS_COUNT];
@@ -494,7 +496,7 @@ static void get_dallas_values(void)
 	bool dallas_requested = false;
 	
 	static uint8_t dallas_next_num = 0;
-	static const uint32_t dallas_period = 2000L;
+	static const uint32_t dallas_period = 1000L;
 	
 	for (i = 0; i < IOSLOTS_COUNT; ++i)
 	{
@@ -645,6 +647,12 @@ uint8_t input_discrete(uint8_t id, int *err)
 	
 	if (state->io_discrete)
 		state->io_discrete(state, IN, &value);
+	
+	if (value = UNKNOWN_VALUE)
+		*err = 1;
+	else
+		*err = 0;
+	
 	return value;
 }
 
@@ -662,6 +670,12 @@ float input_analog(uint8_t id, int *err)
 	
 	if (state->io_analog)
 		state->io_analog(state, IN, &value);
+	
+	if (isnan(value))
+		*err = 1;
+	else
+		*err = 0;
+	
 	return value;
 }
 

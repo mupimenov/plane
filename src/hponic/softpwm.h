@@ -10,8 +10,7 @@ extern "C" {
 struct softpwm_params
 {
 	uint8_t period;
-	float duty_min;
-	float duty_max;
+	uint8_t duration_min;
 };
 
 struct softpwm_state
