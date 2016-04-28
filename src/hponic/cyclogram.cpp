@@ -5,8 +5,15 @@
 
 extern unsigned long millis(void);
 
-void cyclogram_start(	struct cyclogram_params *params,
-						struct cyclogram_state *state)
+void cyclogram_reset(struct cyclogram_state *state)
+{
+	state->phase = CYCLOGRAM_IDLE;
+	state->start = 0;
+	state->remains = 0;
+}
+
+void cyclogram_start(	struct cyclogram_state *state,
+						struct cyclogram_params *params)
 {
 	state->phase = CYCLOGRAM_HIGH;
 	state->start = millis();
@@ -16,8 +23,8 @@ void cyclogram_start(	struct cyclogram_params *params,
 		state->remains = 1;
 }
 
-uint8_t cyclogram_step(		struct cyclogram_params *params, 
-							struct cyclogram_state *state)
+uint8_t cyclogram_step(		struct cyclogram_state *state,
+							struct cyclogram_params *params)
 {
 	switch (params->type)
 	{

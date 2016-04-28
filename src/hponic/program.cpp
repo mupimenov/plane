@@ -1,5 +1,6 @@
 #include "program.h"
 
+#include <stdbool.h>
 #include <string.h>
 #include <math.h>
 
@@ -53,53 +54,142 @@ struct pid_control_state
 	uint8_t value;
 };
 
-union abstract_program_state
+struct abstract_program_state
 {
-	struct timer_control_state timer;
-	struct relay_control_state relay;
-	struct pid_control_state pid;
+	union {
+		struct timer_control_state timer;
+		struct relay_control_state relay;
+		struct pid_control_state pid;
+	} data;
 };
 
-static union abstract_program_state program_state[PROGRAMS_COUNT];
+static struct abstract_program_state 	program_state[PROGRAMS_COUNT];
+static bool 							need_prepare = false;
 
 void program_init(void)
 {
 	memset(program_state, 0, sizeof(program_state));
+	need_prepare = true;
 }
 
-static void timer_control_execute(struct timer_control_program *program, struct timer_control_state *state);
-static void relay_control_execute(struct relay_control_program *program, struct relay_control_state *state);
-static void pid_control_execute(struct pid_control_program *program, struct pid_control_state *state);
+void program_reset(void)
+{
+	need_prepare = true;
+}
+
+static bool prepare_timer_control(struct abstract_program_state *state, struct abstract_program *program)
+{
+	if (program->data.common.type != TIMER_CONTROL_PROGRAM)
+		return false;
+	
+	state->data.timer.phase = TIMER_COMPUTE;
+	cyclogram_reset(&state->data.timer.cyclogram);
+	
+	return true;
+}
+
+static bool prepare_relay_control(struct abstract_program_state *state, struct abstract_program *program)
+{
+	if (program->data.common.type != RELAY_CONTROL_PROGRAM)
+		return false;
+	
+	state->data.relay.phase = RELAY_COMPUTE;
+	state->data.relay.value = OFF;
+	cyclogram_reset(&state->data.relay.cyclogram);
+	
+	return true;
+}
+
+static bool prepare_pid_control(struct abstract_program_state *state, struct abstract_program *program)
+{
+	if (program->data.common.type != PID_CONTROL_PROGRAM)
+		return false;
+	
+	state->data.pid.integral_sum = 0.0f;
+	state->data.pid.last_millis = millis();
+	softpwm_reset(&state->data.pid.softpwm_s);
+	state->data.pid.value = OFF;
+	
+	return true;
+}
+
+static bool prepare_empty_program(struct abstract_program_state *state, struct abstract_program *program)
+{	
+	return true;
+}
+
+typedef bool (*prep_program_fn)(struct abstract_program_state *, struct abstract_program *);
+
+static const prep_program_fn  prepare_program[] = {
+	prepare_timer_control,
+	prepare_relay_control,
+	prepare_pid_control,
+	
+	prepare_empty_program
+};
+
+static const uint8_t prepare_program_count = sizeof(prepare_program) / sizeof(prepare_program[0]);
+
+static void program_prepare(void)
+{
+	if (need_prepare)
+	{
+		uint8_t i;	
+		
+		for (i = 0; i < PROGRAMS_COUNT; ++i)
+		{
+			struct abstract_program program;
+			uint8_t j;
+			
+			read_program(num, &program);
+			
+			for (j = 0; j < prepare_program_count; ++j)
+			{
+				if (prepare_program[j](&program_state[i], &program))
+					break;
+			}
+		}
+		
+		need_prepare = false;
+	}
+}
+
+static void timer_control_execute(struct timer_control_state *state, struct timer_control_program *program);
+static void relay_control_execute(struct relay_control_state *state, struct relay_control_program *program);
+static void pid_control_execute(struct pid_control_state *state, struct pid_control_program *program);
 
 void program_execute(void)
 {
-	int num;
-
-	for (num = 0; num < PROGRAMS_COUNT; ++num)
+	program_prepare();
 	{
-		struct abstract_program program;
-		read_program(num, &program);
-		
-		switch (program.data.common.type)
+		uint8_t num;
+
+		for (num = 0; num < PROGRAMS_COUNT; ++num)
 		{
-		case TIMER_CONTROL_PROGRAM:
-			timer_control_execute(&program.data.timer, &program_state[num].timer);
-			break;
-		case RELAY_CONTROL_PROGRAM:
-			relay_control_execute(&program.data.relay, &program_state[num].relay);
-			break;
-		case PID_CONTROL_PROGRAM:
-			pid_control_execute(&program.data.pid, &program_state[num].pid);
-			break;
-		default:
-			break;
+			struct abstract_program program;
+			read_program(num, &program);
+			
+			switch (program.data.common.type)
+			{
+			case TIMER_CONTROL_PROGRAM:
+				timer_control_execute(&program_state[num].data.timer, &program.data.timer);
+				break;
+			case RELAY_CONTROL_PROGRAM:
+				relay_control_execute(&program_state[num].data.relay, &program.data.relay);
+				break;
+			case PID_CONTROL_PROGRAM:
+				pid_control_execute(&program_state[num].data.pid, &program.data.pid);
+				break;
+			default:
+				break;
+			}
 		}
 	}
 }
 
 /* TIMER CONTROL PROGRAM */
 
-static void timer_control_execute(struct timer_control_program *program, struct timer_control_state *state)
+static void timer_control_execute(struct timer_control_state *state, struct timer_control_program *program)
 {
 	uint8_t value = OFF;
 	int err;
@@ -135,7 +225,7 @@ static void timer_control_execute(struct timer_control_program *program, struct 
 
 /* RELAY CONTROL PROGRAM */
 
-static void relay_control_execute(struct relay_control_program *program, struct relay_control_state *state)
+static void relay_control_execute(struct relay_control_state *state, struct relay_control_program *program)
 {
 	uint8_t value = OFF;
 	int err;
@@ -208,7 +298,7 @@ static void relay_control_execute(struct relay_control_program *program, struct 
 
 /* PID CONTROL PROGRAM */
 
-static void pid_control_execute(struct pid_control_program *program, struct pid_control_state *state)
+static void pid_control_execute(struct pid_control_state *state, struct pid_control_program *program)
 {
 	const uint32_t step = 10;
 	const float period_min = 5.0f;

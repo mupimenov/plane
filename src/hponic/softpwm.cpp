@@ -5,15 +5,15 @@
 
 extern unsigned long millis(void);
 
-enum softpwm_phase
+void softpwm_reset(struct softpwm_state *state)
 {
-	IMPULSE_IDLE,
-	IMPULSE_HIGH,
-	IMPULSE_LOW
-};
+	state->phase = IMPULSE_IDLE;
+	state->start = 0;
+	state->value = 0.0f;
+}
 
-uint8_t softpwm_step(	const struct softpwm_params *params, 
-						struct softpwm_state *state, 
+uint8_t softpwm_step(	struct softpwm_state *state,
+						const struct softpwm_params *params
 						float x)
 {
 	uint8_t value = OFF;

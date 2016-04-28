@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 void program_init(void);
+void program_reset(void);
 void program_execute(void);
 
 #ifdef __cplusplus

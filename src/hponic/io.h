@@ -10,6 +10,8 @@ extern "C" {
 void io_lock(void);
 void io_unlock(void);
 
+void io_reset(void);
+
 void io_init(void);
 void io_execute_in(void);
 void io_execute_out(void);

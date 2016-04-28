@@ -81,11 +81,11 @@ struct dallas_temperature_state
 	float value;
 };
 
-struct ioslot_state
+struct abstract_ioslot_state
 {
-	void (*execute)(struct ioslot_state *, struct abstract_ioslot *ioslot, uint8_t mode);
-	void (*io_discrete)(struct ioslot_state *, uint8_t mode, uint8_t *value);
-	void (*io_analog)(struct ioslot_state *, uint8_t mode, float *value);
+	void (*execute)(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode);
+	void (*io_discrete)(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value);
+	void (*io_analog)(struct abstract_ioslot_state *state, uint8_t mode, float *value);
 	
 	union {
 		struct common_state 			common;
@@ -104,8 +104,9 @@ enum MODE
 	OUT
 };
 
-static struct ioslot_state 			ioslot_state[IOSLOTS_COUNT];
-static osMutexId 					mutex;
+static struct abstract_ioslot_state 	ioslot_state[IOSLOTS_COUNT];
+static osMutexId 						mutex;
+static bool 							need_prepare = false;
 
 void io_lock(void)
 {
@@ -121,6 +122,14 @@ void io_init(void)
 {
 	memset(adc_value, 0, sizeof(adc_value));
 	mutex = osMutexCreate(NULL);
+	need_prepare = true;
+}
+
+void io_reset(void)
+{
+	osMutexWait(mutex, osWaitForever);
+	need_prepare = true;
+	osMutexRelease(mutex);
 }
 
 static void fill_adc_values(void)
@@ -135,7 +144,7 @@ static void fill_adc_values(void)
 
 /* ANALOG INPUT */
 
-static void analog_input_execute(struct ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+static void analog_input_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
 {
 	if (mode == IN)
 	{
@@ -145,7 +154,7 @@ static void analog_input_execute(struct ioslot_state *state, struct abstract_ios
 	}
 }
 
-static void analog_input_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
+static void analog_input_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
 {
 	if (mode == IN)
 	{
@@ -153,7 +162,7 @@ static void analog_input_io_discrete(struct ioslot_state *state, uint8_t mode, u
 	}
 }
 
-static void analog_input_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
+static void analog_input_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
 {
 	if (mode == IN)
 	{
@@ -161,7 +170,7 @@ static void analog_input_io_analog(struct ioslot_state *state, uint8_t mode, flo
 	}
 }
 
-static bool prepare_analog_input(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_analog_input(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {
 	if (ioslot->data.common.driver != ANALOG_INPUT_DRIVER)
 		return false;
@@ -172,18 +181,23 @@ static bool prepare_analog_input(struct ioslot_state *state, struct abstract_ios
 	
 	state->data.analog_input.driver = ioslot->data.analog_input.driver;
 	state->data.analog_input.id = ioslot->data.analog_input.id;
+	state->data.analog_input.value = NAN;
 	
 	return true;
 }
 
 /* DISCRETE INPUT */
 
-static void discrete_input_execute(struct ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+static void discrete_input_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
 {
 	if (mode == IN)
 	{
+		uint8_t in = (state->data.discrete_input.id & 1);
+		if (ioslot->data.discrete_input.inverse)
+			in = in == ON? OFF: ON;
+		
 		state->data.discrete_input.sequence = (state->data.discrete_input.sequence << 1)
-				| (state->data.discrete_input.id & 1);
+				| in;
 			
 		if ((state->data.discrete_input.value == OFF) 
 			&& ((state->data.discrete_input.sequence & DISCRETE_INPUT_FILTER_BITS) == DISCRETE_INPUT_FILTER_BITS))
@@ -198,7 +212,7 @@ static void discrete_input_execute(struct ioslot_state *state, struct abstract_i
 	}
 }
 
-static void discrete_input_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
+static void discrete_input_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
 {
 	if (mode == IN)
 	{
@@ -206,7 +220,7 @@ static void discrete_input_io_discrete(struct ioslot_state *state, uint8_t mode,
 	}
 }
 
-static void discrete_input_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
+static void discrete_input_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
 {
 	if (mode == IN)
 	{
@@ -214,7 +228,7 @@ static void discrete_input_io_analog(struct ioslot_state *state, uint8_t mode, f
 	}
 }
 
-static bool prepare_discrete_input(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_discrete_input(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {
 	if (ioslot->data.common.driver != DISCRETE_INPUT_DRIVER)
 		return false;
@@ -226,12 +240,15 @@ static bool prepare_discrete_input(struct ioslot_state *state, struct abstract_i
 	state->data.discrete_input.driver = ioslot->data.discrete_input.driver;
 	state->data.discrete_input.id = ioslot->data.discrete_input.id;
 	
+	state->data.discrete_input.sequence = 0;
+	state->data.discrete_input.value = UNKNOWN_VALUE;
+	
 	return true;
 }
 
 /* DISCRETE OUTPUT */
 
-static void discrete_output_execute(struct ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+static void discrete_output_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
 {
 	if (mode == OUT)
 	{
@@ -246,12 +263,16 @@ static void discrete_output_execute(struct ioslot_state *state, struct abstract_
 				= (state->data.discrete_output.count == max_count) ? ON: OFF;
 		}
 		
+		// INVERSE?
+		if (ioslot->data.discrete_output.inverse)
+			state->data.discrete_output.value = state->data.discrete_output.value == ON? OFF: ON;
+		
 		// OUT AND CLEAR
 		state->data.discrete_output.count = 0;
 	}
 }
 
-static void discrete_output_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
+static void discrete_output_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
 {
 	if (mode == IN)
 	{
@@ -264,7 +285,7 @@ static void discrete_output_io_discrete(struct ioslot_state *state, uint8_t mode
 	}
 }
 
-static void discrete_output_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
+static void discrete_output_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
 {
 	if (mode == IN)
 	{
@@ -278,7 +299,7 @@ static void discrete_output_io_analog(struct ioslot_state *state, uint8_t mode, 
 	}
 }
 
-static bool prepare_discrete_output(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_discrete_output(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {
 	if (ioslot->data.common.driver != DISCRETE_OUTPUT_DRIVER)
 		return false;
@@ -290,12 +311,15 @@ static bool prepare_discrete_output(struct ioslot_state *state, struct abstract_
 	state->data.discrete_output.driver = ioslot->data.discrete_output.driver;
 	state->data.discrete_output.id = ioslot->data.discrete_output.id;
 	
+	state->data.discrete_output.count = 0;
+	state->data.discrete_output.value = 0;
+	
 	return true;
 }
 
 /* DHT22 TEMPERATURE */
 
-static void dht22_temperature_execute(struct ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+static void dht22_temperature_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
 {
 	if (mode == IN)
 	{
@@ -303,7 +327,7 @@ static void dht22_temperature_execute(struct ioslot_state *state, struct abstrac
 	}
 }
 
-static void dht22_temperature_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
+static void dht22_temperature_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
 {
 	if (mode == IN)
 	{
@@ -311,7 +335,7 @@ static void dht22_temperature_io_discrete(struct ioslot_state *state, uint8_t mo
 	}
 }
 
-static void dht22_temperature_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
+static void dht22_temperature_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
 {
 	if (mode == IN)
 	{
@@ -319,7 +343,7 @@ static void dht22_temperature_io_analog(struct ioslot_state *state, uint8_t mode
 	}
 }
 
-static bool prepare_dht22_temperature(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_dht22_temperature(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {
 	if (ioslot->data.common.driver != DHT22_TEMPERATURE_DRIVER)
 		return false;
@@ -332,12 +356,14 @@ static bool prepare_dht22_temperature(struct ioslot_state *state, struct abstrac
 	state->data.dht22_temperature.id = ioslot->data.dht22_temperature.id;
 	state->data.dht22_temperature.pin = ioslot->data.dht22_temperature.pin;
 	
+	state->data.dht22_temperature.value = NAN;
+	
 	return true;
 }
 
 /* DHT22 HUMIDITY */
 
-static void dht22_humidity_execute(struct ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+static void dht22_humidity_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
 {
 	if (mode == IN)
 	{
@@ -345,7 +371,7 @@ static void dht22_humidity_execute(struct ioslot_state *state, struct abstract_i
 	}
 }
 
-static void dht22_humidity_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
+static void dht22_humidity_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
 {
 	if (mode == IN)
 	{
@@ -353,7 +379,7 @@ static void dht22_humidity_io_discrete(struct ioslot_state *state, uint8_t mode,
 	}
 }
 
-static void dht22_humidity_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
+static void dht22_humidity_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
 {
 	if (mode == IN)
 	{
@@ -361,7 +387,7 @@ static void dht22_humidity_io_analog(struct ioslot_state *state, uint8_t mode, f
 	}
 }
 
-static bool prepare_dht22_humidity(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_dht22_humidity(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {
 	if (ioslot->data.common.driver != DHT22_HUMIDITY_DRIVER)
 		return false;
@@ -373,6 +399,8 @@ static bool prepare_dht22_humidity(struct ioslot_state *state, struct abstract_i
 	state->data.dht22_humidity.driver = ioslot->data.dht22_humidity.driver;
 	state->data.dht22_humidity.id = ioslot->data.dht22_humidity.id;
 	state->data.dht22_humidity.pin = ioslot->data.dht22_humidity.pin;
+	
+	state->data.dht22_humidity.value = NAN;
 	
 	return true;
 }
@@ -450,7 +478,7 @@ static void get_dht22_values(void)
 
 /* DALLAS TEMPERATURE */
 
-static void dallas_temperature_execute(struct ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+static void dallas_temperature_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
 {
 	if (mode == IN)
 	{
@@ -458,7 +486,7 @@ static void dallas_temperature_execute(struct ioslot_state *state, struct abstra
 	}
 }
 
-static void dallas_temperature_io_discrete(struct ioslot_state *state, uint8_t mode, uint8_t *value)
+static void dallas_temperature_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
 {
 	if (mode == IN)
 	{
@@ -466,7 +494,7 @@ static void dallas_temperature_io_discrete(struct ioslot_state *state, uint8_t m
 	}
 }
 
-static void dallas_temperature_io_analog(struct ioslot_state *state, uint8_t mode, float *value)
+static void dallas_temperature_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
 {
 	if (mode == IN)
 	{
@@ -474,7 +502,7 @@ static void dallas_temperature_io_analog(struct ioslot_state *state, uint8_t mod
 	}
 }
 
-static bool prepare_dallas_temperature(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_dallas_temperature(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {
 	if (ioslot->data.common.driver != DALLAS_TEMPERATURE_DRIVER)
 		return false;
@@ -486,6 +514,8 @@ static bool prepare_dallas_temperature(struct ioslot_state *state, struct abstra
 	state->data.dallas_temperature.driver = ioslot->data.dallas_temperature.driver;
 	state->data.dallas_temperature.id = ioslot->data.dallas_temperature.id;
 	state->data.dallas_temperature.pin = ioslot->data.dallas_temperature.pin;
+	
+	state->data.dallas_temperature.value = NAN;
 	
 	return true;
 }
@@ -530,7 +560,7 @@ static void get_dallas_values(void)
 	}
 }
 
-static bool prepare_empty_slot(struct ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_empty_slot(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {	
 	state->execute = NULL;
 	state->io_discrete = NULL;
@@ -542,7 +572,7 @@ static bool prepare_empty_slot(struct ioslot_state *state, struct abstract_ioslo
 	return true;
 }
 
-typedef bool (*prep_ioslot_fn)(struct ioslot_state *, struct abstract_ioslot *);
+typedef bool (*prep_ioslot_fn)(struct abstract_ioslot_state *, struct abstract_ioslot *);
 
 static const prep_ioslot_fn  prepare_ioslot[] = {
 	prepare_analog_input,
@@ -559,20 +589,25 @@ static const uint8_t prepare_ioslot_count = sizeof(prepare_ioslot) / sizeof(prep
 
 static void io_prepare(void)
 {
-	uint8_t i;	
-	
-	for (i = 0; i < IOSLOTS_COUNT; ++i)
+	if (need_prepare)
 	{
-		struct abstract_ioslot ioslot;
-		uint8_t j;
+		uint8_t i;	
 		
-		read_ioslot(i, &ioslot);
-		
-		for (j = 0; j < prepare_ioslot_count; ++j)
+		for (i = 0; i < IOSLOTS_COUNT; ++i)
 		{
-			if (prepare_ioslot[j](&ioslot_state[i], &ioslot))
-				break;
+			struct abstract_ioslot ioslot;
+			uint8_t j;
+			
+			read_ioslot(i, &ioslot);
+			
+			for (j = 0; j < prepare_ioslot_count; ++j)
+			{
+				if (prepare_ioslot[j](&ioslot_state[i], &ioslot))
+					break;
+			}
 		}
+		
+		need_prepare = false;
 	}
 }
 

@@ -20,8 +20,17 @@ struct softpwm_state
 	float value;
 };
 
-uint8_t softpwm_step(	const struct softpwm_params *params,
-						struct softpwm_state *state,
+enum softpwm_phase
+{
+	IMPULSE_IDLE,
+	IMPULSE_HIGH,
+	IMPULSE_LOW
+};
+
+void softpwm_reset(struct softpwm_state *state);
+
+uint8_t softpwm_step(	struct softpwm_state *state,
+						const struct softpwm_params *params,
 						float x);
 
 #ifdef __cplusplus

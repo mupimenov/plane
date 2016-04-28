@@ -38,11 +38,13 @@ enum cyclogram_phase
 	CYCLOGRAM_LOW
 };
 
-void cyclogram_start(	struct cyclogram_params *params,
-						struct cyclogram_state *state);
+void cyclogram_reset(struct cyclogram_state *state);
+
+void cyclogram_start(	struct cyclogram_state *state,
+						struct cyclogram_params *params);
 						
-uint8_t cyclogram_step(		struct cyclogram_params *params, 
-							struct cyclogram_state *state);
+uint8_t cyclogram_step(		struct cyclogram_state *state,
+							struct cyclogram_params *params);
 							
 bool cyclogram_is_stopped(struct cyclogram_state *state);
 
