@@ -13,11 +13,13 @@
 
 #include "modbus.h"
 
-#define LINK_PERIOD_MS 		100
+#define MODBUS_ADDRESS 0x01
+
+#define LINK_PERIOD_MS 				100
 
 static osThreadId 					link;
 
-#define LINK_PACKET_SIZE 			((uint16_t)255)
+#define LINK_PACKET_SIZE 			((uint8_t)255)
 static uint8_t 						recv_buffer[LINK_PACKET_SIZE] = {0};
 static uint8_t 						send_buffer[LINK_PACKET_SIZE] = {0};
 
@@ -50,6 +52,15 @@ static const struct modbus_regs_table holding_tables[] = {
 		{0, 0, NULL}
 };
 
+static struct common_coil_bit {
+	uint8_t restart_programs;
+} 									controls;
+
+static const struct modbus_bits_table coil_tables[] = {
+	{0x0000, sizeof(controls), (uint8_t*)&controls},
+	{0, 0, NULL}
+};
+
 static int modbus_read(struct modbus_instance *instance, uint8_t *buffer, uint8_t max_size)
 {
 	uart_device_t *dev = (uart_device_t *)instance->arg;
@@ -65,21 +76,35 @@ static int modbus_write(struct modbus_instance *instance, const uint8_t *packet,
 	MODBUS_RETURN(instance, MODBUS_SUCCESS);
 }
 
-#define COILS_OFFSET(__table__, __var__) ((uint8_t*)(&(__table__)) - (uint8_t*)(&(__table__).__var__))
-#define COILS_IN(__start__, __offset__,__address__, __count__) ((__start__ + __offset__) >= __address__ && (__start__ + __offset__) <= (__address__ + __count__))
+#define ELEMENT_OFFSET(__table__, __var__) ((uint8_t*)(&(__table__)) - (uint8_t*)(&(__table__).__var__))
+#define ELEMENT_IN(__start__, __offset__,__address__, __count__) ((__start__ + __offset__) >= (__address__) && (__start__ + __offset__) <= (__address__ + __count__))
 
 static int modbus_after_write_table(struct modbus_instance *instance, enum modbus_table table, uint16_t address, uint16_t count)
 {
 	if (table == MODBUS_TABLE_HOLDING_REGISTERS)
 	{
-		int offset = COILS_OFFSET(common_values, now);
-		if (COILS_IN(0x0000, offset, address, count))
+		int offset = ELEMENT_OFFSET(common_values, now);
+		if (ELEMENT_IN(0x0000, offset, address, count))
 		{
 			// SYNC CLOCK
 			struct rtc_date d = {common_values.now.day, common_values.now.month, common_values.now.year};
 			struct rtc_time t = {common_values.now.hours, common_values.now.minutes, common_values.now.seconds};
 			hw_rtc_set_date(&d);
 			hw_rtc_set_time(&t);
+		}
+	}
+	
+	if (table == MODBUS_TABLE_COILS)
+	{
+		int offset = ELEMENT_OFFSET(controls, restart_programs);
+		if (ELEMENT_IN(0x0000, offset, address, count))
+		{
+			if (controls.restart_programs = 0x01)
+			{
+				controls.restart_programs = 0x00;
+				
+				program_reset();
+			}
 		}
 	}
 
@@ -96,8 +121,7 @@ static int modbus_read_file(struct modbus_instance *instance, uint16_t filenum, 
 		start_address = IOSLOT_START_ADDRESS;
 		found = true;
 	}
-
-	if (filenum == 0x0002)
+	else if (filenum == 0x0002)
 	{
 		start_address = PROGRAM_START_ADDRESS;
 		found = true;
@@ -133,8 +157,7 @@ static int modbus_write_file(struct modbus_instance *instance, uint16_t filenum,
 		start_address = IOSLOT_START_ADDRESS;
 		found = true;
 	}
-
-	if (filenum == 0x0002)
+	else if (filenum == 0x0002)
 	{
 		start_address = PROGRAM_START_ADDRESS;
 		found = true;
@@ -157,6 +180,15 @@ static int modbus_write_file(struct modbus_instance *instance, uint16_t filenum,
 		}
 
 		config_unlock();
+		
+		if (filenum == 0x0001)
+		{
+			io_reset();
+		}
+		else if (filenum == 0x0002)
+		{
+			program_reset();
+		}
 
 		MODBUS_RETURN(instance, MODBUS_SUCCESS);
 	}
@@ -222,16 +254,16 @@ static void _link(void const * argument)
 		goto error;
 
 	modbus.arg = dev;
-	modbus.address = 0x01;
+	modbus.address = MODBUS_ADDRESS;
 	modbus.recv_buffer = recv_buffer;
 	modbus.recv_buffer_size = LINK_PACKET_SIZE;
 	modbus.send_buffer = send_buffer;
 	modbus.send_buffer_size = LINK_PACKET_SIZE;
 
-	modbus.id = (uint8_t*)"PLANE";
+	modbus.id = (uint8_t*)"HPONIC";
 
-	modbus.coil_tables = 0;
-	modbus.discrete_tables = 0;
+	modbus.coil_tables = coil_tables;
+	modbus.discrete_tables = NULL;
 	modbus.input_tables = input_tables;
 	modbus.holding_tables = holding_tables;
 
