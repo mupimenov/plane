@@ -280,7 +280,8 @@ static void discrete_output_io_discrete(struct abstract_ioslot_state *state, uin
 
 	if (mode == OUT)
 	{
-		state->data.discrete_output.count++;
+		if (*value == ON)
+			state->data.discrete_output.count++;
 	}
 }
 

@@ -42,7 +42,7 @@ uint8_t cyclogram_step(		struct cyclogram_state *state,
 	case CYCLOGRAM_IMPULSE:
 		if (state->phase == CYCLOGRAM_HIGH)
 		{
-			if (millis() - state->start > params->impulse_duration)
+			if ((millis() - state->start) > (params->impulse_duration * 1000UL))
 			{
 				state->phase = CYCLOGRAM_LOW;
 				state->start = millis();
@@ -51,7 +51,7 @@ uint8_t cyclogram_step(		struct cyclogram_state *state,
 		
 		if (state->phase == CYCLOGRAM_LOW)
 		{
-			if (millis() - state->start > params->pause_duration)
+			if ((millis() - state->start) > (params->pause_duration * 1000UL))
 			{
 				--state->remains;
 				if (!state->remains)
