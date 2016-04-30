@@ -76,7 +76,6 @@ struct dallas_temperature_state
 	uint8_t driver;
 	uint8_t id;
 	
-	uint8_t pin;	
 	uint32_t last_millis;
 	float value;
 };
@@ -513,7 +512,6 @@ static bool prepare_dallas_temperature(struct abstract_ioslot_state *state, stru
 	
 	state->data.dallas_temperature.driver = ioslot->data.dallas_temperature.driver;
 	state->data.dallas_temperature.id = ioslot->data.dallas_temperature.id;
-	state->data.dallas_temperature.pin = ioslot->data.dallas_temperature.pin;
 	
 	state->data.dallas_temperature.value = NAN;
 	
@@ -535,7 +533,6 @@ static void get_dallas_values(void)
 			if (i >= dallas_next_num)
 			{
 				uint32_t now = millis();
-				uint8_t pin = ioslot_state[i].data.dallas_temperature.pin;
 				uint32_t last_millis = ioslot_state[i].data.dallas_temperature.last_millis;
 				
 				if (last_millis + dallas_period > now
