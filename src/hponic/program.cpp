@@ -141,7 +141,7 @@ static void program_prepare(void)
 			struct abstract_program program;
 			uint8_t j;
 			
-			read_program(num, &program);
+			read_program(i, &program);
 			
 			for (j = 0; j < prepare_program_count; ++j)
 			{
@@ -212,9 +212,9 @@ static void timer_control_execute(struct timer_control_state *state, struct time
 	if (state->phase == TIMER_OUTPUT)
 	{
 		if (cyclogram_is_stopped(&state->cyclogram))
-			cyclogram_start(&program->cyclogram, &state->cyclogram);
+			cyclogram_start(&state->cyclogram, &program->cyclogram);
 		
-		value = cyclogram_step(&program->cyclogram, &state->cyclogram);
+		value = cyclogram_step(&state->cyclogram, &program->cyclogram);
 		
 		if (cyclogram_is_stopped(&state->cyclogram))
 			state->phase = TIMER_COMPUTE;
@@ -285,9 +285,9 @@ static void relay_control_execute(struct relay_control_state *state, struct rela
 	if (state->phase == RELAY_OUTPUT)
 	{
 		if (cyclogram_is_stopped(&state->cyclogram))
-			cyclogram_start(&program->cyclogram, &state->cyclogram);
+			cyclogram_start(&state->cyclogram, &program->cyclogram);
 		
-		value = cyclogram_step(&program->cyclogram, &state->cyclogram);
+		value = cyclogram_step(&state->cyclogram, &program->cyclogram);
 		
 		if (cyclogram_is_stopped(&state->cyclogram))
 			state->phase = RELAY_COMPUTE;
@@ -374,7 +374,7 @@ static void pid_control_execute(struct pid_control_state *state, struct pid_cont
 			state->softpwm_p.period = period;
 			state->softpwm_p.duration_min = duration_min;
 			
-			state->value = softpwm_step(&state->softpwm_p, &state->softpwm_s, y);
+			state->value = softpwm_step(&state->softpwm_s, &state->softpwm_p, y);
 			
 		} while (0);
 	}

@@ -13,7 +13,7 @@ void softpwm_reset(struct softpwm_state *state)
 }
 
 uint8_t softpwm_step(	struct softpwm_state *state,
-						const struct softpwm_params *params
+						const struct softpwm_params *params,
 						float x)
 {
 	uint8_t value = OFF;

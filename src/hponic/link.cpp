@@ -99,7 +99,7 @@ static int modbus_after_write_table(struct modbus_instance *instance, enum modbu
 		int offset = ELEMENT_OFFSET(controls, restart_programs);
 		if (ELEMENT_IN(0x0000, offset, address, count))
 		{
-			if (controls.restart_programs = 0x01)
+			if (controls.restart_programs == 0x01)
 			{
 				controls.restart_programs = 0x00;
 				

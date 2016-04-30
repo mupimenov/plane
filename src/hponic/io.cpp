@@ -649,7 +649,7 @@ void io_execute_out(void)
 	io_unlock();
 }
 
-void ioslot_state_by_id(uint8_t id, struct ioslot_state **state)
+void ioslot_state_by_id(uint8_t id, struct abstract_ioslot_state **state)
 {
 	uint8_t i;
 
@@ -667,7 +667,7 @@ void ioslot_state_by_id(uint8_t id, struct ioslot_state **state)
 
 uint8_t input_discrete(uint8_t id, int *err)
 {
-	struct ioslot_state *state;
+	struct abstract_ioslot_state *state;
 	uint8_t value = 0;
 	
 	ioslot_state_by_id(id, &state);
@@ -680,7 +680,7 @@ uint8_t input_discrete(uint8_t id, int *err)
 	if (state->io_discrete)
 		state->io_discrete(state, IN, &value);
 	
-	if (value = UNKNOWN_VALUE)
+	if (value == UNKNOWN_VALUE)
 		*err = 1;
 	else
 		*err = 0;
@@ -690,7 +690,7 @@ uint8_t input_discrete(uint8_t id, int *err)
 
 float input_analog(uint8_t id, int *err)
 {
-	struct ioslot_state *state;
+	struct abstract_ioslot_state *state;
 	float value = NAN;
 	
 	ioslot_state_by_id(id, &state);
@@ -713,7 +713,7 @@ float input_analog(uint8_t id, int *err)
 
 void output_discrete(uint8_t id, uint8_t value, int *err)
 {
-	struct ioslot_state *state;
+	struct abstract_ioslot_state *state;
 	
 	ioslot_state_by_id(id, &state);
 	if (!state)
@@ -734,7 +734,7 @@ uint16_t get_adc_value(uint8_t channel)
 float get_ioslot_value(uint8_t num)
 {
 	float value = NAN;
-	struct ioslot_state *state = &ioslot_state[num];
+	struct abstract_ioslot_state *state = &ioslot_state[num];
 
 	if (state->io_analog)
 		state->io_analog(state, IN, &value);
