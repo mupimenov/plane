@@ -58,8 +58,10 @@ static bool analog_input_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
 	ioslot->data.analog_input.driver = arr[0];
 	ioslot->data.analog_input.id = arr[1];
 	ioslot->data.analog_input.num = arr[2];
-	ioslot->data.analog_input.k = array_to_float(arr, 3);
-	ioslot->data.analog_input.b = array_to_float(arr, 7);
+	ioslot->data.analog_input.x1 = (uint16_t)arr[3] | ((uint32_t)arr[4] << 8);
+	ioslot->data.analog_input.x2 = (uint16_t)arr[5] | ((uint32_t)arr[6] << 8);
+	ioslot->data.analog_input.y1 = array_to_float(arr, 7);
+	ioslot->data.analog_input.y2 = array_to_float(arr, 11);
 	
 	return true;
 }

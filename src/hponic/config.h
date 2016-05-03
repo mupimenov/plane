@@ -35,8 +35,10 @@ struct analog_input_ioslot
 	uint8_t id;
 	
 	uint8_t num;
-	float k;
-	float b;
+	uint16_t x1;
+	uint16_t x2;
+	float y1;
+	float y2;
 };
 
 struct discrete_input_ioslot

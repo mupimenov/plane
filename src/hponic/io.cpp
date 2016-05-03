@@ -137,9 +137,14 @@ static void analog_input_execute(struct abstract_ioslot_state *state, struct abs
 {
 	if (mode == IN)
 	{
-		state->data.analog_input.value = ioslot->data.analog_input.k
-			* adc_value[ioslot->data.analog_input.num]
-			+ ioslot->data.analog_input.b;
+		int16_t dx = ioslot->data.analog_input.x2 - ioslot->data.analog_input.x1;
+		if (dx != 0)
+		{
+			float k = (ioslot->data.analog_input.y2 - ioslot->data.analog_input.y1) / ((float)dx);
+			float b = ioslot->data.analog_input.y2 - k * ioslot->data.analog_input.x2;
+
+			state->data.analog_input.value = k * adc_value[ioslot->data.analog_input.num] + b;
+		}
 	}
 }
 
