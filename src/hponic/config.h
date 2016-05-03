@@ -64,20 +64,26 @@ enum discrete_output_operation
 	OPERATION_AND
 };
 
-struct dht22_temperature_ioslot
+struct dhtxx_ioslot
 {
 	uint8_t driver;
 	uint8_t id;
 	
+	uint8_t modification;
+	uint8_t parameter;
 	uint8_t pin;
 };
 
-struct dht22_humidity_ioslot
+enum dhtxx_modification
 {
-	uint8_t driver;
-	uint8_t id;
-	
-	uint8_t pin;
+	DHTxx_DHT11,
+	DHTxx_DHT22
+};
+
+enum dhtxx_parameter
+{
+	DHTxx_TEMPERATURE,
+	DHTxx_HUMIDITY
 };
 
 struct dallas_temperature_ioslot
@@ -95,8 +101,7 @@ struct abstract_ioslot
 		struct analog_input_ioslot 			analog_input;
 		struct discrete_input_ioslot 		discrete_input;
 		struct discrete_output_ioslot 		discrete_output;
-		struct dht22_temperature_ioslot 	dht22_temperature;
-		struct dht22_humidity_ioslot 		dht22_humidity;
+		struct dhtxx_ioslot 				dhtxx;
 		struct dallas_temperature_ioslot 	dallas_temperature;
 	} data;
 };
@@ -107,8 +112,7 @@ enum ioslot_driver
 	ANALOG_INPUT_DRIVER,
 	DISCRETE_INPUT_DRIVER,
 	DISCRETE_OUTPUT_DRIVER,
-	DHT22_TEMPERATURE_DRIVER,
-	DHT22_HUMIDITY_DRIVER,
+	DHTxx_DRIVER,
 	DALLAS_TEMPERATURE_DRIVER
 };
 

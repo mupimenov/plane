@@ -51,21 +51,12 @@ struct discrete_output_state
 	uint8_t value;
 };
 
-struct dht22_temperature_state
+struct dhtxx_state
 {
 	uint8_t driver;
 	uint8_t id;
 	
-	uint8_t pin;	
-	uint32_t last_millis;
-	float value;
-};
-
-struct dht22_humidity_state
-{
-	uint8_t driver;
-	uint8_t id;
-	
+	uint8_t parameter;
 	uint8_t pin;	
 	uint32_t last_millis;
 	float value;
@@ -91,8 +82,7 @@ struct abstract_ioslot_state
 		struct analog_input_state 		analog_input;
 		struct discrete_input_state 	discrete_input;
 		struct discrete_output_state 	discrete_output;
-		struct dht22_temperature_state 	dht22_temperature;
-		struct dht22_humidity_state 	dht22_humidity;
+		struct dhtxx_state 				dhtxx;
 		struct dallas_temperature_state dallas_temperature;
 	} data;
 };
@@ -317,61 +307,17 @@ static bool prepare_discrete_output(struct abstract_ioslot_state *state, struct 
 	return true;
 }
 
-/* DHT22 TEMPERATURE */
+/* DHTxx */
 
-static void dht22_temperature_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
+static void dhtxx_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
 {
 	if (mode == IN)
 	{
-		state->data.dht22_temperature.value = 20.0f;
+
 	}
 }
 
-static void dht22_temperature_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
-{
-	if (mode == IN)
-	{
-		*value = 0;
-	}
-}
-
-static void dht22_temperature_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
-{
-	if (mode == IN)
-	{
-		*value = state->data.dht22_temperature.value;
-	}
-}
-
-static bool prepare_dht22_temperature(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
-{
-	if (ioslot->data.common.driver != DHT22_TEMPERATURE_DRIVER)
-		return false;
-	
-	state->execute = dht22_temperature_execute;
-	state->io_discrete = dht22_temperature_io_discrete;
-	state->io_analog = dht22_temperature_io_analog;
-	
-	state->data.dht22_temperature.driver = ioslot->data.dht22_temperature.driver;
-	state->data.dht22_temperature.id = ioslot->data.dht22_temperature.id;
-	state->data.dht22_temperature.pin = ioslot->data.dht22_temperature.pin;
-	
-	state->data.dht22_temperature.value = NAN;
-	
-	return true;
-}
-
-/* DHT22 HUMIDITY */
-
-static void dht22_humidity_execute(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot, uint8_t mode)
-{
-	if (mode == IN)
-	{
-		state->data.dht22_humidity.value = 60.0f;
-	}
-}
-
-static void dht22_humidity_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
+static void dhtxx_io_discrete(struct abstract_ioslot_state *state, uint8_t mode, uint8_t *value)
 {
 	if (mode == IN)
 	{
@@ -379,100 +325,92 @@ static void dht22_humidity_io_discrete(struct abstract_ioslot_state *state, uint
 	}
 }
 
-static void dht22_humidity_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
+static void dhtxx_io_analog(struct abstract_ioslot_state *state, uint8_t mode, float *value)
 {
 	if (mode == IN)
 	{
-		*value = state->data.dht22_humidity.value;
+		*value = state->data.dhtxx.value;
 	}
 }
 
-static bool prepare_dht22_humidity(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
+static bool prepare_dhtxx(struct abstract_ioslot_state *state, struct abstract_ioslot *ioslot)
 {
-	if (ioslot->data.common.driver != DHT22_HUMIDITY_DRIVER)
+	if (ioslot->data.common.driver != DHTxx_DRIVER)
 		return false;
 	
-	state->execute = dht22_humidity_execute;
-	state->io_discrete = dht22_humidity_io_discrete;
-	state->io_analog = dht22_humidity_io_analog;
+	state->execute = dhtxx_execute;
+	state->io_discrete = dhtxx_io_discrete;
+	state->io_analog = dhtxx_io_analog;
 	
-	state->data.dht22_humidity.driver = ioslot->data.dht22_humidity.driver;
-	state->data.dht22_humidity.id = ioslot->data.dht22_humidity.id;
-	state->data.dht22_humidity.pin = ioslot->data.dht22_humidity.pin;
+	state->data.dhtxx.driver = ioslot->data.dhtxx.driver;
+	state->data.dhtxx.id = ioslot->data.dhtxx.id;
+
+	state->data.dhtxx.parameter = ioslot->data.dhtxx.parameter;
+	state->data.dhtxx.pin = ioslot->data.dhtxx.pin;
 	
-	state->data.dht22_humidity.value = NAN;
+	state->data.dhtxx.value = NAN;
 	
 	return true;
 }
 
-static void update_dht22_state(uint8_t pin, uint32_t now, float temperature, float humidity)
+static void update_dhtxx_state(uint8_t pin, uint32_t now, float temperature, float humidity)
 {
 	uint8_t i;
 	
 	for (i = 0; i < IOSLOTS_COUNT; ++i)
 	{
-		if (ioslot_state[i].data.common.driver == DHT22_TEMPERATURE_DRIVER)
+		if (ioslot_state[i].data.common.driver == DHTxx_DRIVER)
 		{
-			if (ioslot_state[i].data.dht22_temperature.pin == pin)
+			if (ioslot_state[i].data.dhtxx.pin == pin)
 			{
-				ioslot_state[i].data.dht22_temperature.last_millis = now;
-				ioslot_state[i].data.dht22_temperature.value = temperature;
-			}
-		}
-		
-		if (ioslot_state[i].data.common.driver == DHT22_HUMIDITY_DRIVER)
-		{
-			if (ioslot_state[i].data.dht22_humidity.pin == pin)
-			{
-				ioslot_state[i].data.dht22_humidity.last_millis = now;
-				ioslot_state[i].data.dht22_humidity.value = humidity;
+				ioslot_state[i].data.dhtxx.last_millis = now;
+
+				if (ioslot_state[i].data.dhtxx.parameter == DHTxx_TEMPERATURE)
+					ioslot_state[i].data.dhtxx.value = temperature;
+				else
+					ioslot_state[i].data.dhtxx.value = humidity;
 			}
 		}
 	}
 }
 
-static void get_dht22_values(void)
+static void get_dhtxx_values(void)
 {
 	uint8_t i;
-	bool dht22_requested = false;
+	bool dhtxx_requested = false;
 	
-	static uint8_t dht22_next_num = 0;
-	static const uint32_t dht22_period = 2000UL;
+	static uint8_t dhtxx_next_num = 0;
+	static const uint32_t dhtxx_period = 2000UL;
 	
 	for (i = 0; i < IOSLOTS_COUNT; ++i)
 	{
-		if (ioslot_state[i].data.common.driver == DHT22_TEMPERATURE_DRIVER
-			|| ioslot_state[i].data.common.driver == DHT22_HUMIDITY_DRIVER)
+		if (ioslot_state[i].data.common.driver == DHTxx_DRIVER)
 		{
-			if (i >= dht22_next_num)
+			if (i >= dhtxx_next_num)
 			{
 				uint32_t now = millis();
-				uint8_t pin = (ioslot_state[i].data.common.driver == DHT22_TEMPERATURE_DRIVER) ?
-					ioslot_state[i].data.dht22_temperature.pin : 
-					ioslot_state[i].data.dht22_humidity.pin;
-				uint32_t last_millis = (ioslot_state[i].data.common.driver == DHT22_TEMPERATURE_DRIVER) ?	
-					ioslot_state[i].data.dht22_temperature.last_millis : 
-					ioslot_state[i].data.dht22_humidity.last_millis;
+				uint8_t pin = ioslot_state[i].data.dhtxx.pin;
+				uint32_t last_millis = ioslot_state[i].data.dhtxx.last_millis;
 				
-				if (last_millis + dht22_period > now
+				if (last_millis + dhtxx_period > now
 					|| now < last_millis)
 				{
-					float temperature = 10.0f + i * 0.5f;
-					float humidity = 30.0f + i * 1.0f;
+					float temperature = NAN;
+					float humidity = NAN;
 					
-					update_dht22_state(pin, now, temperature, humidity);
+					update_dhtxx_state(pin, now, temperature, humidity);
 					
-					dht22_requested = true;
-					dht22_next_num = i + 1;
+					dhtxx_requested = true;
+					dhtxx_next_num = i + 1;
 					break;
 				}
 			}
 		}
 	}
 	
-	if (!dht22_requested)
+	if (!dhtxx_requested)
 	{
-		dht22_next_num = 0;
+		dhtxx_next_num = 0;
 	}
 }
 
@@ -482,7 +420,7 @@ static void dallas_temperature_execute(struct abstract_ioslot_state *state, stru
 {
 	if (mode == IN)
 	{
-		state->data.dallas_temperature.value = 20.0f;
+
 	}
 }
 
@@ -576,8 +514,7 @@ static const prep_ioslot_fn  prepare_ioslot[] = {
 	prepare_analog_input,
 	prepare_discrete_input,
 	prepare_discrete_output,
-	prepare_dht22_temperature,
-	prepare_dht22_humidity,
+	prepare_dhtxx,
 	prepare_dallas_temperature,
 	
 	prepare_empty_slot
@@ -627,7 +564,7 @@ void io_execute_in(void)
 				ioslot_state[i].execute(&ioslot_state[i], &ioslot, IN);
 		}
 	
-		get_dht22_values();
+		get_dhtxx_values();
 		get_dallas_values();
 	}
 	io_unlock();

@@ -11,6 +11,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef MODBUS_BUFFER_SIZE
 #define MODBUS_BUFFER_SIZE 128
 #endif
@@ -150,5 +154,9 @@ enum modbus_instance_error {
 #define MODBUS_RETURN(__instance__, __err__) { (__instance__)->error = __err__; return (__err__? -1: 0); }
 
 int modbus_io(struct modbus_instance *instance);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SRC_LIB_MODBUS_H_ */

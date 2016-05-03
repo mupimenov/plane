@@ -91,26 +91,17 @@ static bool discrete_output_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
 	return true;
 }
 
-static bool dht22_temperature_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
+static bool dhtxx_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
 {
-	if (arr[0] != DHT22_TEMPERATURE_DRIVER)
+	if (arr[0] != DHTxx_DRIVER)
 		return false;
 	
-	ioslot->data.dht22_temperature.driver = arr[0];
-	ioslot->data.dht22_temperature.id = arr[1];
-	ioslot->data.dht22_temperature.pin = arr[2];
-		
-	return true;
-}
+	ioslot->data.dhtxx.driver = arr[0];
+	ioslot->data.dhtxx.id = arr[1];
 
-static bool dht22_humidity_parser(uint8_t *arr, struct abstract_ioslot *ioslot)
-{
-	if (arr[0] != DHT22_HUMIDITY_DRIVER)
-		return false;
-	
-	ioslot->data.dht22_humidity.driver = arr[0];
-	ioslot->data.dht22_humidity.id = arr[1];
-	ioslot->data.dht22_humidity.pin = arr[2];
+	ioslot->data.dhtxx.modification = arr[2];
+	ioslot->data.dhtxx.parameter = arr[3];
+	ioslot->data.dhtxx.pin = arr[4];
 		
 	return true;
 }
@@ -141,8 +132,7 @@ static const ioslot_parser_fn ioslot_parser[] = {
 	analog_input_parser,
 	discrete_input_parser,
 	discrete_output_parser,
-	dht22_temperature_parser,
-	dht22_humidity_parser,
+	dhtxx_parser,
 	dallas_temperature_parser,
 	empty_slot_parser
 };
